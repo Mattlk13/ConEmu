@@ -54,6 +54,9 @@ enum CEFontStyles
 	fnt_NULL        = (MAX_FONT_STYLES+2), // 10 (used in VirtualConsole SelectFont)
 };
 
+// #include "../common/DefTermBase.h"
+enum class TerminalConfirmClose : uint32_t;
+
 #define CURSORSIZE_MIN 5
 #define CURSORSIZE_MAX 100
 #define CURSORSIZEPIX_MIN 1
@@ -100,6 +103,7 @@ enum FarMacroVersion
 #include "SetAppSettings.h"
 #include "SetCmdTask.h"
 #include "UpdateSet.h"
+#include "../common/PaletteColors.h"
 #include "../common/wcwidth.h"
 
 class CSettings;
@@ -147,7 +151,7 @@ struct TabBtnDblClick
 #define TABBTN_DEFAULT_CLICK_ACTION  TabBtnDblClick::RenameTab
 
 // ‘%1’ - line number, ‘%2’ - column number, ‘%3’ - C:\\Path\\File, ‘%4’ - C:/Path/File, ‘%5’ - /C/Path/File
-#define HI_GOTO_EDITOR_FAR     L"far.exe /e%1:%2 \"%3\""
+#define HI_GOTO_EDITOR_FAR     L"{Far} /e%1:%2 \"%3\""
 #define HI_GOTO_EDITOR_VIMW    L"vim.exe +%1 \"%3\""
 // Use '#' prefix to run GUI editor outside of ConEmu
 #define HI_GOTO_EDITOR_SCITE   L"#scite.exe \"-open:%4\" -goto:%1,%2"
@@ -156,6 +160,23 @@ struct TabBtnDblClick
 // And just a starter for highlighted file
 #define HI_GOTO_EDITOR_CMD     L"cmd.exe /c \"echo Starting \"%3\" & \"%3\"\""
 #define HI_GOTO_EDITOR_CMD_NC  L"cmd.exe /c \"echo Starting \"%3\" & \"%3\"\" -new_console:n"
+
+enum class MouseButtonAction : uint8_t
+{
+	// Mouse button click does nothing.
+	None = 0,
+	// Copy selected text to Windows clipboard if selection exists.
+	Copy = 1,
+	// Always paste text from Windows clipboard.
+	Paste = 2,
+	// If there is no selection in console - do paste from Windows clipboard.
+	// If selection exists and mouse cursor is *outside* the  - do copy to Windows cliboard.
+	// If mouse cursor is *inside* the selection region - do paste of selected text without touching Windows clipboard.
+	Auto = 3,
+	Menu = 4,
+	// Last one for comparison.
+	MaxId,
+};
 
 
 extern const wchar_t gsDefaultColorScheme[64]; // = L"<ConEmu>";
@@ -197,26 +218,26 @@ struct Settings
 		//reg->Load(L"AutoReloadEnvironment", AutoReloadEnvironment);
 		bool AutoReloadEnvironment;
 		//reg->LoadMSZ(L"EnvironmentSet", psEnvironmentSet);
-		wchar_t* psEnvironmentSet; // commands: multiline, "\r\n" separated
+		CEStr* psEnvironmentSet; // commands: multiline, "\r\n" separated
 
 		// Service functions
-		wchar_t* LineDelimited2MSZ(const wchar_t* apszApps, bool bLowerCase = true); // "|"-delimited string -> MSZ
-		wchar_t* MSZ2LineDelimited(const wchar_t* apszLines, LPCWSTR asDelim = L"|", bool bFinalToo = false); // MSZ -> "<asDelim>"-delimited string
-		wchar_t* MultiLine2MSZ(const wchar_t* apszLines, DWORD* pcbSize/*in bytes*/); // "\r\n"-delimited string -> MSZ
+		CEStr LineDelimited2MSZ(const wchar_t* apszApps, bool bLowerCase = true) const;                    // "|"-delimited string -> MSZ
+		CEStr MSZ2LineDelimited(const wchar_t* apszLines, LPCWSTR asDelim = L"|", bool bFinalToo = false); // MSZ -> "<asDelim>"-delimited string
+		CEStr MultiLine2MSZ(const wchar_t* apszLines, DWORD* pcbSize/*in bytes*/) const;                   // "\r\n"-delimited string -> MSZ
 
-		bool LoadMSZ(SettingsBase* reg, LPCWSTR asName, wchar_t*& rsLines, LPCWSTR asDelim /*= L"|"*/, bool bFinalToo /*= false*/);
+		bool LoadMSZ(SettingsBase* reg, LPCWSTR asName, CEStr& rsLines, LPCWSTR asDelim /*= L"|"*/, bool bFinalToo /*= false*/);
 		void SaveMSZ(SettingsBase* reg, LPCWSTR asName, LPCWSTR rsLines, LPCWSTR asDelim /*= L"|"*/, bool bLowerCase /*= true*/);
 
 		// Replace default terminal
 		bool isSetDefaultTerminal;
 		bool isRegisterOnOsStartup;
 		bool isRegisterOnOsStartupTSA;
-		bool isRegisterAgressive;
+		bool isRegisterAggressive;
 		bool isDefaultTerminalNoInjects;
 		bool isDefaultTerminalNewWindow;
 		bool isDefaultTerminalDebugLog;
-		BYTE nDefaultTerminalConfirmClose; // "Press Enter to close console". 0 - Auto, 1 - Always, 2 - Never
-		wchar_t* GetDefaultTerminalApps(); // "|" delimited
+		TerminalConfirmClose nDefaultTerminalConfirmClose; // "Press Enter to close console". 0 - Auto, 1 - Always, 2 - Never
+		CEStr GetDefaultTerminalApps(); // "|" delimited
 		const wchar_t* GetDefaultTerminalAppsMSZ(); // "\0" delimited
 		void SetDefaultTerminalApps(const wchar_t* apszApps); // "|" delimited
 	private:
@@ -225,11 +246,15 @@ struct Settings
 	public:
 		int GetAppSettingsId(LPCWSTR asExeAppName, bool abElevated);
 		const AppSettings* GetAppSettings(int anAppId=-1);
-		const COLORREF* GetDefColors(LPCWSTR asDefName = NULL);
-		COLORREF* GetColors(int anAppId=-1, BOOL abFade = FALSE);
-		COLORREF* GetColorsPrepare(COLORREF *pColors, COLORREF *pColorsFade, bool* pbFadeInitialized, BOOL abFade);
-		void PrepareFadeColors(COLORREF *pColors, COLORREF *pColorsFade, bool* pbFadeInitialized);
-		COLORREF* GetPaletteColors(LPCWSTR asPalette, BOOL abFade = FALSE);
+	private:
+		static bool GetDefColors(LPCWSTR asDefName, ConEmu::PaletteColors& colors);
+		static void GetWindowsColors(ConEmu::PaletteColors& colors);
+	public:
+		const ConEmu::PaletteColors& GetColors(int anAppId=-1, BOOL abFade = FALSE);
+		const ConEmu::PaletteColors& GetColorsPrepare(const ConEmu::PaletteColors& colors,
+			ConEmu::PaletteColors& colorsFade, bool* pbFadeInitialized, BOOL abFade);
+		void PrepareFadeColors(const ConEmu::PaletteColors& colors, ConEmu::PaletteColors& colorsFade, bool* pbFadeInitialized);
+		const ConEmu::PaletteColors& GetPaletteColors(LPCWSTR asPalette, BOOL abFade = FALSE);
 		COLORREF GetFadeColor(COLORREF cr);
 		void ResetFadeColors();
 
@@ -246,7 +271,7 @@ struct Settings
 		const ColorPalette* PaletteFindByColors(bool bMatchAttributes, const ColorPalette* pCur);
 		int PaletteGetIndex(LPCWSTR asName);
 		void PaletteSaveAs(LPCWSTR asName); // Save active colors to named palette
-		void PaletteSaveAs(LPCWSTR asName, BYTE anTextColorIdx, BYTE anBackColorIdx, BYTE anPopTextColorIdx, BYTE anPopBackColorIdx, const COLORREF (&aColors)[0x10], bool abSaveSettings);
+		void PaletteSaveAs(LPCWSTR asName, BYTE anTextColorIdx, BYTE anBackColorIdx, BYTE anPopTextColorIdx, BYTE anPopBackColorIdx, const ConEmu::PaletteColors& aColors, bool abSaveSettings);
 		void PaletteDelete(LPCWSTR asName); // Delete named palette
 		void PaletteSetStdIndexes();
 		int PaletteSetActive(LPCWSTR asName);
@@ -307,27 +332,20 @@ struct Settings
 
 	private:
 		// reg->Load(L"ColorTableNN", Colors[i]);
-		COLORREF Colors[0x10];
-		COLORREF ColorsFade[0x10];
-		bool mb_FadeInitialized;
-
-		//struct CEAppColors
-		//{
-		//	COLORREF Colors[0x10];
-		//	COLORREF ColorsFade[0x10];
-		//	bool FadeInitialized;
-		//} **AppColors; // [AppCount]
+		ConEmu::PaletteColors Colors{};
+		ConEmu::PaletteColors ColorsFade{};
+		bool mb_FadeInitialized = false;
 
 		void LoadCursorSettings(SettingsBase* reg, CECursorType* pActive, CECursorType* pInactive);
 
 		void LoadAppsSettings(SettingsBase* reg, bool abFromOpDlg = false);
-		void LoadAppSettings(SettingsBase* reg, AppSettings* pApp/*, COLORREF* pColors*/);
-		void SaveAppSettings(SettingsBase* reg, AppSettings* pApp/*, COLORREF* pColors*/);
+		void LoadAppSettings(SettingsBase* reg, AppSettings* pApp);
+		void SaveAppSettings(SettingsBase* reg, AppSettings* pApp);
 
 		void SaveStdColors(SettingsBase* reg);
 		void SaveStartCommands(SettingsBase* reg);
 
-		void FreeApps(int NewAppCount = 0, AppSettings** NewApps = NULL/*, Settings::CEAppColors** NewAppColors = NULL*/);
+		void FreeApps(int NewAppCount = 0, AppSettings** NewApps = nullptr/*, Settings::CEAppColors** NewAppColors = nullptr*/);
 
 		DWORD mn_FadeMul;
 		inline BYTE GetFadeColorItem(BYTE c);
@@ -479,7 +497,7 @@ struct Settings
 		// Default: "2013-25C4"; Example: "0410-044F;2013-25C4;"
 		BYTE mpc_CharAltFontRanges[0x10000];
 		int ParseCharRanges(LPCWSTR asRanges, BYTE (&Chars)[0x10000], BYTE abValue = TRUE);
-		wchar_t* CreateCharRanges(BYTE (&Chars)[0x10000]); // caller must free(result)
+		CEStr CreateCharRanges(BYTE (&Chars)[0x10000]); // caller must free(result)
 		bool CheckCharAltFont(ucs32 inChar);
 
 
@@ -548,7 +566,7 @@ struct Settings
 		wchar_t* pszCTSIntelligentExceptions; // Don't use IntelliSel in these app-processes
 		public:
 		// Service functions
-		wchar_t* GetIntelligentExceptions(); // "|" delimited
+		CEStr GetIntelligentExceptions(); // "|" delimited
 		const wchar_t* GetIntelligentExceptionsMSZ(); // "\0" delimited
 		void SetIntelligentExceptions(const wchar_t* apszApps); // "|" delimited
 		//reg->Load(L"CTS.AutoCopy", isCTSAutoCopy);
@@ -575,9 +593,9 @@ struct Settings
 		DWORD isCTSForceLocale; // Try to bypass clipboard locale problems (pasting to old non-unicode apps)
 
 		//reg->Load(L"CTS.RBtnAction", isCTSRBtnAction);
-		BYTE isCTSRBtnAction; // enum: 0-off, 1-copy, 2-paste, 3-auto
+		MouseButtonAction isCTSRBtnAction;
 		//reg->Load(L"CTS.MBtnAction", isCTSMBtnAction);
-		BYTE isCTSMBtnAction; // enum: 0-off, 1-copy, 2-paste, 3-auto
+		MouseButtonAction isCTSMBtnAction;
 		//reg->Load(L"CTS.ColorIndex", isCTSColorIndex);
 		BYTE isCTSColorIndex;
 		//reg->Load(L"ClipboardConfirmEnter", isPasteConfirmEnter);
@@ -705,7 +723,6 @@ struct Settings
 		unsigned isLogging(unsigned level = 1);
 		void EnableLogging();
 		void DisableLogging();
-		LPCWSTR GetLogFileName();
 
 		//reg->Load(L"EnhanceGraphics", isEnhanceGraphics);
 		bool isEnhanceGraphics; // Progressbars and scrollbars (pseudographics)
@@ -794,7 +811,7 @@ struct Settings
 		//reg->Load(L"TabFontHeight", nTabFontHeight);
 		int nTabFontHeight;
 
-		//if (!reg->Load(L"TabCloseMacro", &sTabCloseMacro) || (sTabCloseMacro && !*sTabCloseMacro)) { if (sTabCloseMacro) { free(sTabCloseMacro); sTabCloseMacro = NULL; } }
+		//if (!reg->Load(L"TabCloseMacro", &sTabCloseMacro) || (sTabCloseMacro && !*sTabCloseMacro)) { if (sTabCloseMacro) { free(sTabCloseMacro); sTabCloseMacro = nullptr; } }
 		wchar_t *sTabCloseMacro;
 		LPCWSTR TabCloseMacro(FarMacroVersion fmv);
 		LPCWSTR TabCloseMacroDefault(FarMacroVersion fmv);
@@ -827,7 +844,7 @@ struct Settings
 		//reg->Load(L"UseCurrentSizePos", isUseCurrentSizePos);
 		bool isUseCurrentSizePos; // Show in settings dialog and save current window size/pos
 
-		bool isIntegralSize();
+		bool isIntegralSize() const;
 
 	private:
 		// При закрытии окна крестиком - сохранять только один раз,
@@ -902,6 +919,8 @@ struct Settings
 			cc_FarEV     = 8, // was isCloseEditViewConfirm
 		};
 		BYTE nCloseConfirmFlags; // CloseConfirmOptions
+		//reg->Load(L"ResetTerminalConfirm", isResetTerminalConfirm);
+		bool isResetTerminalConfirm;
 		//reg->Load(L"Multi.CmdKey", vmMultiCmd);
 		//DWORD vmMultiCmd;
 		//reg->Load(L"Multi.AutoCreate", isMultiAutoCreate);
@@ -967,7 +986,7 @@ struct Settings
 		// VkMod = LOBYTE - VK, старшие три байта - модификаторы (тоже VK)
 
 		// Вернуть заданный VkMod, или 0 если не задан. nDescrID = vkXXX (e.g. vkMinimizeRestore)
-		DWORD GetHotkeyById(int nDescrID, const ConEmuHotKey** ppHK = NULL);
+		DWORD GetHotkeyById(int nDescrID, const ConEmuHotKey** ppHK = nullptr);
 		// Return hotkeyname by ID
 		LPCWSTR GetHotkeyNameById(int nDescrID, wchar_t (&szFull)[128], bool bShowNone = true);
 		// Проверить, задан ли этот hotkey. nDescrID = vkXXX (e.g. vkMinimizeRestore)
@@ -1059,17 +1078,17 @@ struct Settings
 		DWORD nAffinity;
 
 		//reg->Load(L"UseInjects", isUseInjects);
-		bool isUseInjects; // 0 - off, 1 - always /*, 2 - only executable*/. Note, Root process is infiltrated always.
+		bool isUseInjects; // 0 - off, 1 - always. Note, Root process is infiltrated always.
 
 		//reg->Load(L"ProcessAnsi", isProcessAnsi);
 		bool isProcessAnsi; // ANSI X3.64 & XTerm-256-colors Support
 		// "AnsiExecution"
 		BYTE isAnsiExec; // enum AnsiExecutionPerm
 		// "AnsiAllowedCommands"
-		wchar_t* psAnsiAllowed; // commands: multiline, "\r\n" separated
+		CEStr* psAnsiAllowed; // commands: multiline, "\r\n" separated
 
 		//reg->Load(L"AnsiLog", isAnsiLog);
-		bool isAnsiLog; // Limited logging of console contents (same output as processed by CECF_ProcessAnsi)
+		bool isAnsiLog; // Limited logging of console contents (same output as processed by ConEmu::ConsoleFlags::ProcessAnsi)
 		//reg->Load(L"AnsiLogCodes", isAnsiLogCodes);
 		bool isAnsiLogCodes; // Write to logfile ANSI sequences (from app and our internals)
 		//reg->Load(L"AnsiLogPath", &pszAnsiLog);
@@ -1123,7 +1142,7 @@ struct Settings
 		//HotGuiMacro Macros[24];
 
 	public:
-		void LoadSettings(bool& rbNeedCreateVanilla, const SettingsStorage* apStorage = NULL);
+		void LoadSettings(bool& rbNeedCreateVanilla, const SettingsStorage* apStorage = nullptr);
 		void InitSettings();
 		void InitVanilla();
 		void InitVanillaFontSettings();
@@ -1132,14 +1151,14 @@ struct Settings
 		void LoadPalettes(SettingsBase* reg);
 		void CreatePredefinedPalettes(int iAddUserCount);
 		void LoadProgresses(SettingsBase* reg);
-		BOOL SaveSettings(BOOL abSilent = FALSE, const SettingsStorage* apStorage = NULL);
+		BOOL SaveSettings(BOOL abSilent = FALSE, const SettingsStorage* apStorage = nullptr);
 		void SaveAppsSettings(SettingsBase* reg);
 		bool SaveCmdTasks(SettingsBase* reg);
 		bool SaveProgresses(SettingsBase* reg);
 		void SaveConsoleFont();
-		void SaveFindOptions(SettingsBase* reg = NULL);
+		void SaveFindOptions(SettingsBase* reg = nullptr);
 		void OnAutoSaveTimer();
-		void AutoSaveSettings(SettingsBase* reg = NULL, bool saveAll = false);
+		void AutoSaveSettings(SettingsBase* reg = nullptr, bool saveAll = false);
 		bool IsAutoSaveSettings(bool saveAll);
 		void SaveSettingsOnExit();
 		void SaveStopBuzzingDate();
@@ -1149,7 +1168,7 @@ struct Settings
 		void ResetSavedOnExit();
 
 		SettingsBase* CreateSettings(const SettingsStorage* apStorage);
-		wchar_t* GetStoragePlaceDescr(const SettingsStorage* apStorage, LPCWSTR asPrefix);
+		CEStr GetStoragePlaceDescr(const SettingsStorage* apStorage, LPCWSTR asPrefix);
 
 		SettingsStorage GetSettingsType();
 };

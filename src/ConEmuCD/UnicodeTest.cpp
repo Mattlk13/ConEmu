@@ -30,16 +30,19 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define HIDE_USE_EXCEPTION_INFO
 #define SHOWDEBUGSTR
 
+#include "ConsoleMain.h"
+#include "ConEmuSrv.h"
+#include "ExitCodes.h"
+#include "UnicodeTest.h"
+
+
+#include "ConsoleState.h"
 #include "../common/Common.h"
 #include "../common/ConsoleRead.h"
 #include "../common/EnvVar.h"
 #include "../common/StartupEnvEx.h"
 #include "../common/UnicodeChars.h"
 #include "../common/WCodePage.h"
-#include "../ConEmu/version.h"
-
-#include "ConEmuSrv.h"
-#include "UnicodeTest.h"
 
 void PrintConsoleInfo()
 {
@@ -57,25 +60,25 @@ void PrintConsoleInfo()
 				return;
 			pOsInfo->Set(asText);
 		}, (LPARAM)&osInfo);
-	_wprintf(osInfo);
+	PrintBuffer(osInfo);
 
 	wchar_t szInfo[1024];
 	CONSOLE_SCREEN_BUFFER_INFO csbi = {};
 	CONSOLE_CURSOR_INFO ci = {};
 
-	msprintf(szInfo, countof(szInfo), L"ConHWND=0x%08X, Class=\"", LODWORD(ghConWnd));
-	if (ghConWnd)
-		GetClassName(ghConWnd, szInfo+lstrlen(szInfo), 255);
+	msprintf(szInfo, countof(szInfo), L"ConHWND=0x%08X, Class=\"", LODWORD(gState.realConWnd_));
+	if (gState.realConWnd_)
+		GetClassName(gState.realConWnd_, szInfo+lstrlen(szInfo), 255);
 	lstrcpyn(szInfo+lstrlen(szInfo), L"\"\r\n", 4);
-	_wprintf(szInfo);
+	PrintBuffer(szInfo);
 
 	{
 	CEStr gui(GetEnvVar(L"ConEmuPID"));
 	if (gui.GetLen() > 64) gui.ms_Val[64] = 0;
 	CEStr srv(GetEnvVar(L"ConEmuServerPID"));
 	if (srv.GetLen() > 64) srv.ms_Val[64] = 0;
-	msprintf(szInfo, countof(szInfo), L"GuiPID=%u, ConEmuPID=%s, ConEmuServerPID=%s\n", gnConEmuPID, gui.c_str(L""), srv.c_str(L""));
-	_wprintf(szInfo);
+	msprintf(szInfo, countof(szInfo), L"GuiPID=%u, ConEmuPID=%s, ConEmuServerPID=%s\n", gState.conemuPid_, gui.c_str(L""), srv.c_str(L""));
+	PrintBuffer(szInfo);
 	}
 
 	struct FONT_INFOEX
@@ -109,7 +112,7 @@ void PrintConsoleInfo()
 				info.FaceName);
 		}
 	}
-	_wprintf(szInfo);
+	PrintBuffer(szInfo);
 
 	{
 	DWORD nInMode = 0, nOutMode = 0, nErrMode = 0;
@@ -122,7 +125,7 @@ void PrintConsoleInfo()
 	msprintf(szErr, countof(szErr), L"x%X", nErrMode);
 	msprintf(szInfo, countof(szInfo), L"Handles: In=x%X (Mode=%s) Out=x%X (Mode=%s) Err=x%X (Mode=%s)\r\n",
 		LODWORD(hIn), bIn?szIn:L"-1", LODWORD(hOut), bOut?szOut:L"-1", LODWORD(hErr), bErr?szErr:L"-1");
-	_wprintf(szInfo);
+	PrintBuffer(szInfo);
 	}
 
 	if (GetConsoleScreenBufferInfo(hOut, &csbi))
@@ -133,7 +136,7 @@ void PrintConsoleInfo()
 	else
 		msprintf(szInfo, countof(szInfo), L"GetConsoleScreenBufferInfo failed, code=%u\r\n",
 			GetLastError());
-	_wprintf(szInfo);
+	PrintBuffer(szInfo);
 
 	if (GetConsoleCursorInfo(hOut, &ci))
 		msprintf(szInfo, countof(szInfo), L"Cursor: Pos={%i,%i} Size=%i%% %s\r\n",
@@ -141,18 +144,18 @@ void PrintConsoleInfo()
 	else
 		msprintf(szInfo, countof(szInfo), L"GetConsoleCursorInfo failed, code=%u\r\n",
 			GetLastError());
-	_wprintf(szInfo);
+	PrintBuffer(szInfo);
 
 	DWORD nCP = GetConsoleCP();
 	DWORD nOutCP = GetConsoleOutputCP();
 	CPINFOEX cpinfo = {};
 	DWORD dwLayout = 0, dwLayoutRc = -1;
 	SetLastError(0);
-	IsKeyboardLayoutChanged(dwLayout, &dwLayoutRc);
+	gpWorker->IsKeyboardLayoutChanged(dwLayout, &dwLayoutRc);
 
 	msprintf(szInfo, countof(szInfo), L"ConsoleCP=%u, ConsoleOutputCP=%u, Layout=%08X (%s errcode=%u)\r\n",
 		nCP, nOutCP, dwLayout, dwLayoutRc ? L"failed" : L"OK", dwLayoutRc);
-	_wprintf(szInfo);
+	PrintBuffer(szInfo);
 
 	for (UINT i = 0; i <= 1; i++)
 	{
@@ -176,7 +179,7 @@ void PrintConsoleInfo()
 				cpinfo.LeadByte[6], cpinfo.LeadByte[7], cpinfo.LeadByte[8], cpinfo.LeadByte[9], cpinfo.LeadByte[10], cpinfo.LeadByte[11],
 				cpinfo.CodePageName);
 		}
-		_wprintf(szInfo);
+		PrintBuffer(szInfo);
 	}
 }
 

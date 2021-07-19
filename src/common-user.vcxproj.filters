@@ -27,6 +27,9 @@
     <ClInclude Include="common\ConsoleAnnotation.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="common\ConsoleMessages.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="common\ConsoleTrueMod.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -34,6 +37,9 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="common\DefTermBase.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\DefTermChildMap.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="common\Dump.h">
@@ -51,13 +57,13 @@
     <ClInclude Include="common\MArray.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="common\MAtomic.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="common\MBSTR.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="common\MCircular.h">
-      <Filter>Headers</Filter>
-    </ClInclude>
-    <ClInclude Include="common\MEvent.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="common\MFileLogEx.h">
@@ -106,6 +112,9 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="common\Monitors.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\PaletteColors.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="common\PipeServer.h">
@@ -171,6 +180,9 @@
     <ClInclude Include="common\clink.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="common\crc32.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="common\defines.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -204,9 +216,6 @@
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="common\MBSTR.cpp">
-      <Filter>Sources</Filter>
-    </ClCompile>
-    <ClCompile Include="common\MEvent.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="common\MFileLogEx.cpp">

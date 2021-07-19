@@ -131,7 +131,7 @@ public:
 	void SetLoggingType(GuiLoggingType aNewLogType);
 
 	// Loggers
-	static void debugLogCommand(CESERVER_REQ* pInfo, BOOL abInput, DWORD anTick, DWORD anDur, LPCWSTR asPipe, CESERVER_REQ* pResult = NULL);
+	static void debugLogCommand(CESERVER_REQ* pInfo, BOOL abInput, DWORD anTick, DWORD anDur, LPCWSTR asPipe, CESERVER_REQ* pResult = nullptr);
 	static void debugLogShell(DWORD nParentPID, CESERVER_REQ_ONCREATEPROCESS* pInfo);
 
 	// Called from DBGMSG_LOG_ID
@@ -147,5 +147,5 @@ protected:
 	DWORD mn_ActivityCmdStartTick;
 
 	// Helpers
-	static void debugLogShellText(wchar_t* &pszParamEx, LPCWSTR asFile);
+	static void debugLogShellText(CEStr& pszParamEx, LPCWSTR asFile);
 };

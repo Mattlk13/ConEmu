@@ -70,10 +70,10 @@ void CommandTasks::SetName(LPCWSTR asName, int anCmdIndex)
 		SafeFree(pszName);
 
 		cchNameMax = iLen+16;
-		pszName = (wchar_t*)malloc(cchNameMax*sizeof(wchar_t));
+		pszName = static_cast<wchar_t*>(malloc(cchNameMax*sizeof(wchar_t)));
 		if (!pszName)
 		{
-			_ASSERTE(pszName!=NULL);
+			_ASSERTE(pszName!=nullptr);
 			return;
 		}
 	}
@@ -103,15 +103,15 @@ bool CommandTasks::SetGuiArg(LPCWSTR asGuiArg)
 	if (0 == wcscmp(asGuiArg, (pszGuiArgs ? pszGuiArgs : L"")))
 		return false;
 
-	size_t iLen = wcslen(asGuiArg);
+	const size_t iLen = wcslen(asGuiArg);
 
 	if (!pszGuiArgs || (iLen >= cchGuiArgMax))
 	{
-		size_t cchNew = iLen+256;
-		wchar_t* pszNew = (wchar_t*)malloc(cchNew*sizeof(wchar_t));
+		const size_t cchNew = iLen + 256;
+		wchar_t* pszNew = static_cast<wchar_t*>(malloc(cchNew * sizeof(wchar_t)));
 		if (!pszNew)
 		{
-			_ASSERTE(pszNew!=NULL);
+			_ASSERTE(pszNew!=nullptr);
 			return false;
 		}
 		std::swap(pszNew, pszGuiArgs);
@@ -133,15 +133,15 @@ bool CommandTasks::SetCommands(LPCWSTR asCommands)
 	if (0 == wcscmp(asCommands, (pszCommands ? pszCommands : L"")))
 		return false;
 
-	size_t iLen = wcslen(asCommands);
+	const size_t iLen = wcslen(asCommands);
 
 	if (!pszCommands || (iLen >= cchCmdMax))
 	{
-		size_t cchNew = iLen+1024;
-		wchar_t* pszNew = (wchar_t*)malloc(cchNew*sizeof(wchar_t));
+		const size_t cchNew = iLen + 1024;
+		wchar_t* pszNew = static_cast<wchar_t*>(malloc(cchNew * sizeof(wchar_t)));
 		if (!pszNew)
 		{
-			_ASSERTE(pszNew!=NULL);
+			_ASSERTE(pszNew!=nullptr);
 			return false;
 		}
 		std::swap(pszNew, pszCommands);
@@ -158,7 +158,7 @@ void CommandTasks::ParseGuiArgs(RConStartArgsEx* pArgs) const
 {
 	if (!pArgs)
 	{
-		_ASSERTE(pArgs!=NULL);
+		_ASSERTE(pArgs!=nullptr);
 		return;
 	}
 
@@ -166,65 +166,62 @@ void CommandTasks::ParseGuiArgs(RConStartArgsEx* pArgs) const
 	CmdArg szArg;
 	while ((pszArgs = NextArg(pszArgs, szArg)))
 	{
-		if (szArg.ms_Val[0] == L'-')
-			szArg.ms_Val[0] = L'/';
-
-		if (lstrcmpi(szArg, L"/dir") == 0)
+		if (szArg.IsSwitch(L"-dir"))
 		{
-			if (!(pszArgs = NextArg(pszArgs, szArg)))
+			if (!((pszArgs = NextArg(pszArgs, szArg))))
 				break;
 			if (*szArg)
 			{
-				wchar_t* pszExpand = NULL;
+				CEStr expanded;
 
-				// Например, "%USERPROFILE%"
+				// e.g. "%USERPROFILE%"
 				if (wcschr(szArg, L'%'))
 				{
-					pszExpand = ExpandEnvStr(szArg);
+					expanded = ExpandEnvStr(szArg);
 				}
 
 				SafeFree(pArgs->pszStartupDir);
-				pArgs->pszStartupDir = pszExpand ? pszExpand : lstrdup(szArg);
+				pArgs->pszStartupDir = expanded ? expanded.Detach() : lstrdup(szArg).Detach();
 			}
 		}
-		else if (lstrcmpi(szArg, L"/icon") == 0)
+		else if (szArg.IsSwitch(L"-icon"))
 		{
-			if (!(pszArgs = NextArg(pszArgs, szArg)))
+			if (!((pszArgs = NextArg(pszArgs, szArg))))
 				break;
 			if (*szArg)
 			{
-				wchar_t* pszExpand = NULL;
+				CEStr expanded;
 
-				// Например, "%USERPROFILE%"
+				// e.g. "%USERPROFILE%"
 				if (wcschr(szArg, L'%'))
 				{
-					pszExpand = ExpandEnvStr(szArg);
+					expanded = ExpandEnvStr(szArg);
 				}
 
 				SafeFree(pArgs->pszIconFile);
-				pArgs->pszIconFile = pszExpand ? pszExpand : lstrdup(szArg);
+				pArgs->pszIconFile = expanded ? expanded.Detach() : lstrdup(szArg).Detach();
 			}
 		}
-		else if ((lstrcmpi(szArg, L"/single") == 0) || (lstrcmpi(szArg, L"/reuse") == 0))
+		else if (szArg.OneOfSwitches(L"-single", L"-reuse"))
 		{
 			// Used in the other parts of code
 		}
-		else if (lstrcmpi(szArg, L"/nosingle") == 0)
+		else if (szArg.IsSwitch(L"-NoSingle"))
 		{
 			// Force to run in new ConEmu window
 			pArgs->aRecreate = cra_CreateWindow;
 		}
-		else if (lstrcmpi(szArg, L"/quake") == 0)
+		else if (szArg.IsSwitch(L"-quake"))
 		{
 			// Turn on quake mode in starting console?
 			// Disallowed if current window is already in Quake mode.
 			if (!gpSet->isQuakeStyle)
-				lstrmerge(&pArgs->pszAddGuiArg, L"/quake ");
+				CEStr(pArgs->pszAddGuiArg, L"-quake ").Swap(pArgs->pszAddGuiArg);
 		}
-		else if (lstrcmpi(szArg, L"/noquake") == 0)
+		else if (szArg.IsSwitch(L"-NoQuake"))
 		{
 			// Disable quake in starting console
-			lstrmerge(&pArgs->pszAddGuiArg, L"/noquake ");
+			CEStr(pArgs->pszAddGuiArg, L"-NoQuake ").Swap(pArgs->pszAddGuiArg);
 		}
 		else
 		{
@@ -236,9 +233,8 @@ void CommandTasks::ParseGuiArgs(RConStartArgsEx* pArgs) const
 	// Errors notification
 	if (pszOk && *pszOk)
 	{
-		wchar_t* pszErr = lstrmerge(L"Unsupported task parameters\r\nTask name: ", pszName, L"\r\nParameters: ", pszOk);
+		const CEStr pszErr(L"Unsupported task parameters\r\nTask name: ", pszName, L"\r\nParameters: ", pszOk);
 		MsgBox(pszErr, MB_ICONSTOP);
-		SafeFree(pszErr);
 	}
 }
 
@@ -249,7 +245,7 @@ bool CommandTasks::LoadCmdTask(SettingsBase* reg, int iIndex)
 	int iCmdMax = 0, iCmdCount = 0;
 	DWORD VkMod = 0;
 
-	wchar_t* pszNameSet = NULL;
+	wchar_t* pszNameSet = nullptr;
 	if (iIndex >= 0)
 	{
 		if (!reg->Load(L"Name", &pszNameSet) || !*pszNameSet)
@@ -271,7 +267,13 @@ bool CommandTasks::LoadCmdTask(SettingsBase* reg, int iIndex)
 	//	goto wrap;
 	//}
 
-	_ASSERTE(pszName == NULL && pszGuiArgs == NULL && pszCommands == NULL);
+	if (pszName || pszGuiArgs || pszCommands)
+	{
+		_ASSERTE(pszName == nullptr && pszGuiArgs == nullptr && pszCommands == nullptr);
+		SafeFree(pszName);
+		SafeFree(pszGuiArgs);
+		SafeFree(pszCommands)
+	}
 
 	this->SetName(pszNameSet, iIndex);
 
@@ -300,26 +302,29 @@ bool CommandTasks::LoadCmdTask(SettingsBase* reg, int iIndex)
 
 	if (reg->Load(L"Count", iCmdMax) && (iCmdMax > 0))
 	{
-		size_t nTotalLen = 1024; // с запасом, для редактирования через интерфейс
-		wchar_t** pszCommands = (wchar_t**)calloc(iCmdMax, sizeof(wchar_t*));
+		size_t nTotalLen = 1024; // add some reserve to allow modifications in place via the interface
+		MArray<wchar_t*> commands;
+		commands.resize(iCmdMax);
 
 		for (int j = 0; j < iCmdMax; j++)
 		{
-			swprintf_c(szVal, L"Cmd%i", j+1); // 1-based
+			swprintf_c(szVal, L"Cmd%i", j + 1); // 1-based
 
-			if (reg->Load(szVal, &(pszCommands[j])) && pszCommands[j] && *pszCommands[j])
+			if (reg->Load(szVal, &(commands[j])) && commands[j] && *commands[j])
 			{
 				iCmdCount++;
-				nTotalLen += _tcslen(pszCommands[j])+8; // + ">\r\n\r\n"
+				nTotalLen += _tcslen(commands[j]) + 8; // + ">\r\n\r\n"
 			}
 			else
-				SafeFree(pszCommands[j]);
+			{
+				SafeFree(commands[j]);
+			}
 		}
 
 		if ((iCmdCount > 0) && (nTotalLen))
 		{
-			this->cchCmdMax = nTotalLen+1;
-			this->pszCommands = (wchar_t*)malloc(this->cchCmdMax*sizeof(wchar_t));
+			this->cchCmdMax = nTotalLen + 1;
+			this->pszCommands = static_cast<wchar_t*>(malloc(this->cchCmdMax * sizeof(wchar_t)));
 			if (this->pszCommands)
 			{
 				//this->nCommands = iCmdCount;
@@ -327,27 +332,28 @@ bool CommandTasks::LoadCmdTask(SettingsBase* reg, int iIndex)
 				int nActive = 0;
 				reg->Load(L"Active", nActive); // 1-based
 
-				wchar_t* psz = this->pszCommands; // dest script
+				wchar_t* psz = this->pszCommands; // prepared script
 				for (int k = 0; k < iCmdCount; k++)
 				{
 					bool bActive = false;
-					gpConEmu->ParseScriptLineOptions(pszCommands[k], &bActive, NULL);
+					gpConEmu->ParseScriptLineOptions(commands[k], &bActive, nullptr);
 
-					if (((k+1) == nActive) && !bActive)
+					if (((k + 1) == nActive) && !bActive)
+					{
 						*(psz++) = L'>';
+						*psz = L'\0';
+					}
 
-					lstrcpy(psz, pszCommands[k]);
-					SafeFree(pszCommands[k]);
+					wcscpy_s(psz, cchCmdMax - (psz - this->pszCommands), commands[k]);
+					SafeFree(commands[k]);
 
-					if ((k+1) < iCmdCount)
-						lstrcat(psz, L"\r\n\r\n"); // для визуальности редактирования
+					if ((k + 1) < iCmdCount)
+						wcscat_s(psz, cchCmdMax - (psz - this->pszCommands), L"\r\n\r\n"); // for editing convenience
 
-					psz += lstrlen(psz);
+					psz += wcslen(psz);
 				}
 			}
 		}
-
-		SafeFree(pszCommands);
 	}
 
 wrap:
@@ -355,9 +361,9 @@ wrap:
 	return lbRc;
 }
 
-bool CommandTasks::SaveCmdTask(SettingsBase* reg, bool isStartup)
+bool CommandTasks::SaveCmdTask(SettingsBase* reg, bool isStartup) const
 {
-	bool lbRc = true;
+	const bool lbRc = true;
 	int iCmdCount = 0, iOldCount = 0;
 	int nActive = 0; // 1-based
 	wchar_t szVal[32];
@@ -400,7 +406,7 @@ bool CommandTasks::SaveCmdTask(SettingsBase* reg, bool isStartup)
 				nActive = iCmdCount; // 1-based
 			}
 
-			save_items.push_back(lstrdup(pszCmd));
+			save_items.push_back(lstrdup(pszCmd).Detach());
 
 			if (pszEnd)
 				*pszEnd = chSave;
@@ -431,4 +437,31 @@ bool CommandTasks::SaveCmdTask(SettingsBase* reg, bool isStartup)
 	}
 
 	return lbRc;
+}
+
+CEStr CommandTasks::GetFirstCommandForPrompt() const
+{
+	CEStr lsData;
+	LPCWSTR pszTemp = this->pszCommands;
+	if ((pszTemp = NextLine(pszTemp, lsData)))
+	{
+		RConStartArgsEx args;
+		const auto* const pszRaw = gpConEmu->ParseScriptLineOptions(lsData.ms_Val, nullptr, nullptr);
+		if (pszRaw)
+		{
+			args.pszSpecialCmd = lstrdup(pszRaw).Detach();
+			// Parse all -new_console's
+			args.ProcessNewConArg();
+			// Prohibit external requests for credentials
+			args.CleanPermissions();
+			// Directory?
+			if (!args.pszStartupDir && this->pszGuiArgs)
+			{
+				this->ParseGuiArgs(&args);
+			}
+			// Prepare for execution
+			lsData = args.CreateCommandLine(false);
+		}
+	}
+	return lsData;
 }

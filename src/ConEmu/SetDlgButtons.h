@@ -36,7 +36,7 @@ public:
 	static BYTE isOptChecked(WORD nCtrlId, WORD CB, BYTE uCheck);
 
 public:
-	static wchar_t* CheckButtonMacro(WORD CB, BYTE uCheck);
+	static CEStr CheckButtonMacro(WORD CB, BYTE uCheck);
 
 protected:
 	static bool ProcessButtonClick(HWND hDlg, WORD CB, BYTE uCheck);
@@ -96,6 +96,7 @@ protected:
 	static void OnBtn_NewConfirm(HWND hDlg, WORD CB, BYTE uCheck);
 	static void OnBtn_DupConfirm(HWND hDlg, WORD CB, BYTE uCheck);
 	static void OnBtn_ConfirmDetach(HWND hDlg, WORD CB, BYTE uCheck);
+	static void OnBtn_ConfirmResetTerminal(HWND hDlg, WORD CB, BYTE uCheck);
 	static void OnBtn_LongOutput(HWND hDlg, WORD CB, BYTE uCheck);
 	static void OnBtn_ComspecRadio(HWND hDlg, WORD CB, BYTE uCheck);
 	static void OnBtn_ComspecExplicit(HWND hDlg, WORD CB, BYTE uCheck);

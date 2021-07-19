@@ -39,21 +39,28 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "../common/Common.h"
 #include "../common/CmdLine.h"
+#include "../common/MModule.h"
 
 #include "../ConEmu/version.h"
 #include "../ConEmuCD/ExitCodes.h"
+#include "../ConEmuCD/ExportedFunctions.h"
 #include "../ConEmuCD/ConsoleHelp.h"
 
 #include "ConEmuC.h"
 #include "Downloader.h"
+#include "../common/MHandle.h"
 
-PHANDLER_ROUTINE gfHandlerRoutine = NULL;
+#ifdef _DEBUG
+#include <tuple>
+#endif
+
+PHANDLER_ROUTINE gfHandlerRoutine = nullptr;
 
 BOOL WINAPI HandlerRoutine(DWORD dwCtrlType)
 {
 	if (gfHandlerRoutine)
 	{
-		// Вызов функи из ConEmuHk.dll
+		// Call exported function in ConEmuCD.dll
 		gfHandlerRoutine(dwCtrlType);
 	}
 
@@ -70,54 +77,57 @@ void UnitTests()
 	} UNICODE_STRING;
 	UNICODE_STRING str = {};
 	WCHAR buf[MAX_PATH];
-	str.Buffer = (PWSTR)(((((DWORD_PTR)buf)+7)>>3)<<3);
+	str.Buffer = reinterpret_cast<PWSTR>(((reinterpret_cast<DWORD_PTR>(buf) + 7) >> 3) << 3);
 	lstrcpy(str.Buffer, L"kernel32.dll");
-	str.Length = lstrlen(str.Buffer)*2;
-	str.MaximumLength = str.Length+2;
+	str.Length = static_cast<USHORT>(wcslen(str.Buffer) * 2U);
+	str.MaximumLength = str.Length + 2;
 
 	typedef LONG (__stdcall* LdrGetDllHandleByName_t)(UNICODE_STRING* BaseDllName, UNICODE_STRING* FullDllName, PVOID *DllHandle);
-	HMODULE hNtDll = LoadLibrary(L"ntdll.dll");
-	HMODULE hKernel = GetModuleHandle(str.Buffer);
-	LdrGetDllHandleByName_t LdrGetDllHandleByName_f = (LdrGetDllHandleByName_t)GetProcAddress(hNtDll, "LdrGetDllHandleByName");
-	LONG ntStatus = -1; LPBYTE ptrProc = NULL;
-	if (LdrGetDllHandleByName_f)
+	const MModule hNtDll(L"ntdll.dll");
+	const MModule hKernel(GetModuleHandle(str.Buffer));
+	LdrGetDllHandleByName_t fnLdrGetDllHandleByName = nullptr;
+	hNtDll.GetProcAddress("LdrGetDllHandleByName", fnLdrGetDllHandleByName);
+	LONG ntStatus = -1; LPBYTE ptrProc = nullptr; LONG_PTR nShift = -1;
+	if (fnLdrGetDllHandleByName)
 	{
-		DWORD_PTR nShift = ((LPBYTE)GetProcAddress(hKernel,"LoadLibraryW")) - (LPBYTE)hKernel;
-		if (!LdrGetDllHandleByName_f(&str, NULL, (PVOID*)&ptrProc))
+		FARPROC fnLoadLibraryW = nullptr;
+		if (!hKernel.GetProcAddress("LoadLibraryW", fnLoadLibraryW))
 			goto err;
-		ntStatus = LdrGetDllHandleByName_f(&str, NULL, (PVOID*)&ptrProc);
-		ptrProc += 0x12345;
+		nShift = reinterpret_cast<LPBYTE>(fnLoadLibraryW) - reinterpret_cast<LPBYTE>(static_cast<HMODULE>(hKernel));
+		if (!fnLdrGetDllHandleByName(&str, nullptr, reinterpret_cast<PVOID*>(&ptrProc)))
+			goto err;
+		ntStatus = fnLdrGetDllHandleByName(&str, nullptr, reinterpret_cast<PVOID*>(&ptrProc));
 	}
 err:
-	return;
+	std::ignore = ntStatus;
+	std::ignore = ptrProc;
+	std::ignore = nShift;
 }
 #endif
 
 bool IsOutputRedirected()
 {
 	static int isRedirected = 0;
-	if (isRedirected)
+	if (!isRedirected)
 	{
-		return (isRedirected == 2);
+		const MHandle hOut{ GetStdHandle(STD_OUTPUT_HANDLE) };
+
+		CONSOLE_SCREEN_BUFFER_INFO sbi = {};
+		const BOOL bIsConsole = GetConsoleScreenBufferInfo(hOut, &sbi);
+		if (bIsConsole)
+		{
+			isRedirected = 1;
+		}
+		else
+		{
+			isRedirected = 2;
+		}
 	}
 
-	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-
-	CONSOLE_SCREEN_BUFFER_INFO sbi = {};
-	BOOL bIsConsole = GetConsoleScreenBufferInfo(hOut, &sbi);
-	if (bIsConsole)
-	{
-		isRedirected = 1;
-		return false;
-	}
-	else
-	{
-		isRedirected = 2;
-		return true;
-	}
+	return (isRedirected == 2);
 }
 
-void _wprintf(LPCWSTR asBuffer)
+void PrintBuffer(LPCWSTR asBuffer)
 {
 	if (!asBuffer) return;
 
@@ -132,11 +142,11 @@ void _wprintf(LPCWSTR asBuffer)
 	else
 	{
 		UINT  cp = GetConsoleOutputCP();
-		int cchMax = WideCharToMultiByte(cp, 0, asBuffer, -1, NULL, 0, NULL, NULL) + 1;
-		char* pszOem = (cchMax > 1) ? (char*)malloc(cchMax) : NULL;
+		int cchMax = WideCharToMultiByte(cp, 0, asBuffer, -1, nullptr, 0, nullptr, nullptr) + 1;
+		char* pszOem = (cchMax > 1) ? (char*)malloc(cchMax) : nullptr;
 		if (pszOem)
 		{
-			int nWrite = WideCharToMultiByte(cp, 0, asBuffer, -1, pszOem, cchMax, NULL, NULL);
+			int nWrite = WideCharToMultiByte(cp, 0, asBuffer, -1, pszOem, cchMax, nullptr, nullptr);
 			if (nWrite > 1)
 			{
 				// Don't write terminating '\0' to redirected output
@@ -147,7 +157,7 @@ void _wprintf(LPCWSTR asBuffer)
 	}
 }
 
-void _printf(LPCSTR asBuffer)
+void PrintBuffer(LPCSTR asBuffer)
 {
 	if (!asBuffer) return;
 
@@ -172,7 +182,7 @@ void PrintVersion()
 	swprintf_c(szProgInfo,
 		L"ConEmuC build %s %s. " CECOPYRIGHTSTRING_W L"\n",
 		szVer, WIN3264TEST(L"x86",L"x64"));
-	_wprintf(szProgInfo);
+	PrintBuffer(szProgInfo);
 }
 
 void Help()
@@ -180,12 +190,12 @@ void Help()
 	PrintVersion();
 
 	// See definition in "ConEmuCD/ConsoleHelp.h"
-	_wprintf(pConsoleHelp);
-	_wprintf(pNewConsoleHelp);
+	PrintBuffer(pConsoleHelp);
+	PrintBuffer(pNewConsoleHelp);
 }
 
 static int gn_argc = 0;
-static char** gp_argv = NULL;
+static char** gp_argv = nullptr;
 
 // The function exists in both "ConEmuC/ConEmuC.cpp" and "ConEmuCD/Actions.cpp"
 // Version in "ConEmuC/ConEmuC.cpp" shows arguments from main(int argc, char** argv)
@@ -206,11 +216,11 @@ int DoParseArgs(LPCWSTR asCmdLine)
 			: hOut(ahOut), defAttr(adefAttr)
 		{
 			SetConsoleTextAttribute(hOut, fore|(defAttr & 0xF0));
-		};
+		}
 		~Highlighter()
 		{
 			SetConsoleTextAttribute(hOut, defAttr);
-		};
+		}
 	};
 	#undef HL
 	#define HL(fore) Highlighter hl(hOut, csbi.wAttributes, fore)
@@ -223,78 +233,85 @@ int DoParseArgs(LPCWSTR asCmdLine)
 	strcpy(szCLVer, "<Unknown CL>");
 	#endif
 
+	{ HL(10); PrintBuffer("GetCommandLine():\n"); }
+	{ HL(2);  PrintBuffer("  *: "); }
+	{ HL(8); PrintBuffer("`"); }
+	{ HL(15); PrintBuffer(GetCommandLineW()); }
+	{ HL(8); PrintBuffer("`"); }
+	PrintBuffer("\n");
+
 	sprintf_c(szLine, "main arguments (count %i) {%s}\n", gn_argc, szCLVer);
-	{ HL(10); _printf(szLine); }
+	{ HL(10); PrintBuffer(szLine); }
 	for (int j = 0; j < gn_argc; j++)
 	{
 		if (j >= 999)
 		{
 			HL(12);
-			_printf("*** TOO MANY ARGUMENTS ***\n");
+			PrintBuffer("*** TOO MANY ARGUMENTS ***\n");
 			break;
 		}
-		sprintf_c(szLine, "  %u: ", j);
-		{ HL(2); _printf(szLine); }
+		sprintf_c(szLine, "  %u: ", j + 1);
+		{ HL(2); PrintBuffer(szLine); }
 		if (!gp_argv)
 		{
 			HL(12);
-			_printf("*NULL");
+			PrintBuffer("*NULL");
 		}
 		else if (!gp_argv[j])
 		{
 			HL(12);
-			_printf("<NULL>");
+			PrintBuffer("<NULL>");
 		}
 		else
 		{
-			{ HL(8); _printf("`"); }
-			{ HL(15); _printf(gp_argv[j]); }
-			{ HL(8); _printf("`"); }
+			{ HL(8); PrintBuffer("`"); }
+			{ HL(15); PrintBuffer(gp_argv[j]); }
+			{ HL(8); PrintBuffer("`"); }
 		}
-		_printf("\n");
+		PrintBuffer("\n");
 	}
 
-	{ HL(10); _printf("Parsing command"); }
-	{ HL(8); _printf("\n  `"); }
-	{ HL(15); _wprintf(asCmdLine); }
-	{ HL(8); _printf("`\n"); }
+	{ HL(10); PrintBuffer("Parsing command"); }
+	{ HL(8); PrintBuffer("\n  `"); }
+	{ HL(15); PrintBuffer(asCmdLine); }
+	{ HL(8); PrintBuffer("`\n"); }
 
 	int iShellCount = 0;
 	LPWSTR* ppszShl = CommandLineToArgvW(asCmdLine, &iShellCount);
 
 	int i = 0;
 	CmdArg szArg;
-	{ HL(10); _printf("ConEmu `NextArg` splitter\n"); }
+	{ HL(10); PrintBuffer("ConEmu `NextArg` splitter\n"); }
 	while ((asCmdLine = NextArg(asCmdLine, szArg)))
 	{
-		if (szArg.mb_Quoted)
+		if (szArg.m_bQuoted)
 			DemangleArg(szArg, true);
 		sprintf_c(szLine, "  %u: ", ++i);
-		{ HL(2); _printf(szLine); }
-		{ HL(8); _printf("`"); }
-		{ HL(15); _wprintf(szArg); }
-		{ HL(8); _printf("`\n"); }
+		{ HL(2); PrintBuffer(szLine); }
+		{ HL(8); PrintBuffer("`"); }
+		{ HL(15); PrintBuffer(szArg); }
+		{ HL(8); PrintBuffer("`\n"); }
 	}
 	sprintf_c(szLine, "  Total arguments parsed: %u\n", i);
-	{ HL(8); _printf(szLine); }
+	{ HL(8); PrintBuffer(szLine); }
 
-	{ HL(10); _printf("Standard shell splitter\n"); }
+	{ HL(10); PrintBuffer("Standard shell splitter\n"); }
 	for (int j = 0; j < iShellCount; j++)
 	{
-		sprintf_c(szLine, "  %u: ", j);
-		{ HL(2); _printf(szLine); }
-		{ HL(8); _printf("`"); }
-		{ HL(15); _wprintf(ppszShl[j]); }
-		{ HL(8); _printf("`\n"); }
+		sprintf_c(szLine, "  %u: ", j + 1);
+		{ HL(2); PrintBuffer(szLine); }
+		{ HL(8); PrintBuffer("`"); }
+		{ HL(15); PrintBuffer(ppszShl[j]); }
+		{ HL(8); PrintBuffer("`\n"); }
 	}
 	sprintf_c(szLine, "  Total arguments parsed: %u\n", iShellCount);
-	{ HL(8); _printf(szLine); }
+	{ HL(8); PrintBuffer(szLine); }
 	LocalFree(ppszShl);
 
 	return i;
 }
 
-bool ProcessCommandLine(int& iRc, HMODULE& hConEmu)
+bool ProcessCommandLine(int& iRc, MModule& hConEmu)
 {
 	LPCWSTR pszCmdLine = GetCommandLineW();
 
@@ -324,7 +341,7 @@ bool ProcessCommandLine(int& iRc, HMODULE& hConEmu)
 			if ((lsArg.ms_Val[0] != L'/') && bWasFirst)
 			{
 				LPCWSTR pszName = PointToName(lsArg.ms_Val);
-				if (pszName && (lstrcmpi(pszName, WIN3264TEST(L"ConEmuC.exe",L"ConEmuC64.exe")) == 0))
+				if (pszName && (lstrcmpi(pszName, ConEmuC_EXE_3264) == 0))
 					continue;
 			}
 
@@ -372,11 +389,11 @@ bool ProcessCommandLine(int& iRc, HMODULE& hConEmu)
 		{
 			if (!hConEmu)
 			{
-				// Prefere Help from ConEmuCD.dll because ConEmuC.exe may be outdated (due to stability preference)
-				hConEmu = LoadLibrary(ConEmuCD_DLL_3264);
+				// Prefer Help from ConEmuCD.dll because ConEmuC.exe may be outdated (due to stability preference)
+				hConEmu.Load(ConEmuCD_DLL_3264);
 
 				// Show internal Help variant if only ConEmuCD.dll was failed to load
-				if (hConEmu == NULL)
+				if (!hConEmu)
 				{
 					Help();
 					iRc = CERR_HELPREQUESTED;
@@ -396,15 +413,14 @@ int main(int argc, char** argv)
 	gn_argc = argc; gp_argv = argv;
 
 	int iRc = 0;
-	HMODULE hConEmu = NULL;
+	MModule hConEmu{};
 	wchar_t szErrInfo[200];
 	DWORD dwErr;
-	typedef int (__stdcall* ConsoleMain2_t)(BOOL abAlternative);
-	ConsoleMain2_t lfConsoleMain2;
+	ConsoleMain2_t lfConsoleMain2 = nullptr;
 
 	#ifdef _DEBUG
-	HMODULE hConEmuHk = GetModuleHandle(WIN3264TEST(L"ConEmuHk.dll",L"ConEmuHk64.dll"));
-	_ASSERTE(hConEmuHk==NULL && "Hooks must not be loaded into ConEmuC[64].exe!");
+	const MModule hConEmuHk{ GetModuleHandle(ConEmuHk_DLL_3264) };
+	_ASSERTE(!hConEmuHk.IsValid() && "Hooks must not be loaded into ConEmuC[64].exe!");
 	#endif
 
 	#if defined(SHOW_STARTED_MSGBOX)
@@ -412,7 +428,7 @@ int main(int argc, char** argv)
 	{
 		wchar_t szTitle[100]; swprintf_c(szTitle, WIN3264TEST(L"ConEmuC",L"ConEmuC64") L" Loaded (PID=%i)", GetCurrentProcessId());
 		const wchar_t* pszCmdLine = GetCommandLineW();
-		MessageBox(NULL,pszCmdLine,szTitle,0);
+		MessageBox(nullptr,pszCmdLine,szTitle,0);
 	}
 	#endif
 
@@ -432,7 +448,7 @@ int main(int argc, char** argv)
 
 	// Otherwise - do the full cycle
 	if (!hConEmu)
-		hConEmu = LoadLibrary(ConEmuCD_DLL_3264);
+		hConEmu.Load(ConEmuCD_DLL_3264);
 	dwErr = GetLastError();
 
 	if (!hConEmu)
@@ -441,35 +457,36 @@ int main(int argc, char** argv)
 		           L"Can't load library \"%s\", ErrorCode=0x%08X\n",
 		           ConEmuCD_DLL_3264,
 		           dwErr);
-		_wprintf(szErrInfo);
+		PrintBuffer(szErrInfo);
 		_ASSERTE(FALSE && "LoadLibrary failed");
 		iRc = CERR_CONEMUHK_NOTFOUND;
 		goto wrap;
 	}
 
-	// Загрузить функи из ConEmuHk
-	lfConsoleMain2 = (ConsoleMain2_t)GetProcAddress(hConEmu, "ConsoleMain2");
-	gfHandlerRoutine = (PHANDLER_ROUTINE)GetProcAddress(hConEmu, "HandlerRoutine");
+	// Load exports from ConEmuHk
+	hConEmu.GetProcAddress(FN_CONEMUCD_CONSOLE_MAIN_2_NAME, lfConsoleMain2);
+	hConEmu.GetProcAddress(FN_CONEMUCD_HANDLER_ROUTINE_NAME, gfHandlerRoutine);
+
 
 	if (!lfConsoleMain2 || !gfHandlerRoutine)
 	{
 		dwErr = GetLastError();
 		swprintf_c(szErrInfo,
 		           L"Procedure \"%s\"  not found in library \"%s\"",
-		           lfConsoleMain2 ? L"HandlerRoutine" : L"ConsoleMain2",
+		           lfConsoleMain2 ? _CRT_WIDE(FN_CONEMUCD_HANDLER_ROUTINE_NAME) : _CRT_WIDE(FN_CONEMUCD_CONSOLE_MAIN_2_NAME),
 		           ConEmuCD_DLL_3264);
-		_wprintf(szErrInfo);
+		PrintBuffer(szErrInfo);
 		_ASSERTE(FALSE && "GetProcAddress failed");
-		FreeLibrary(hConEmu);
+		hConEmu.Free();
 		iRc = CERR_CONSOLEMAIN_NOTFOUND;
 		goto wrap;
 	}
 
 	// Main dll entry point for Server & ComSpec
-	iRc = lfConsoleMain2(0/*WorkMode*/);
+	iRc = lfConsoleMain2(ConsoleMainMode::Normal);
 	// Exiting
-	gfHandlerRoutine = NULL;
-	//FreeLibrary(hConEmu); -- Shutdown Server/Comspec уже выполнен
+	gfHandlerRoutine = nullptr;
+
 wrap:
 	//-- bottle neck: relatively long deinitialization
 	ExitProcess(iRc);

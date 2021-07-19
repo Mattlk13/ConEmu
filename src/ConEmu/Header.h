@@ -123,12 +123,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define TIMER_FAILED_TABBAR_ELAPSE 3000 // FAILED_TABBAR_TIMEOUT
 #define TIMER_ACTIVATESPLIT_ID 11
 #define TIMER_ACTIVATESPLIT_ELAPSE 500
+#define TIMER_SELECTION_ID 12
+#define TIMER_SELECTION_ELAPSE 20
 
 #define ACTIVATE_TAB_CRITICAL  1000
 #define POST_UPDATE_TIMEOUT   2000
 
 // Undocumented messages
-#include "ConsoleMessages.h"
+#include "../common/ConsoleMessages.h"
 
 #define MAX_CMD_HISTORY 100
 #define MAX_CMD_HISTORY_SHOW 16
@@ -137,26 +139,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_RENAME_TAB_LEN 128
 
 #define MBox(rt) MsgBox(rt, /*MB_SYSTEMMODAL |*/ MB_ICONINFORMATION, Title)
-#define MBoxA(rt) MsgBox(rt, /*MB_SYSTEMMODAL |*/ MB_ICONINFORMATION, NULL)
-#define MBoxError(rt) MsgBox(rt, /*MB_SYSTEMMODAL |*/ MB_ICONSTOP, NULL)
-
-//#define MBoxAssert(V) if ((V)==FALSE) { TCHAR szAMsg[MAX_PATH*2]; StringCchPrintf(szAMsg, countof(szAMsg), _T("Assertion (%s) at\n%s:%i"), _T(#V), _T(__FILE__), __LINE__); MBoxA(szAMsg); }
+#define MBoxA(rt) MsgBox(rt, /*MB_SYSTEMMODAL |*/ MB_ICONINFORMATION, nullptr)
+#define MBoxError(rt) MsgBox(rt, /*MB_SYSTEMMODAL |*/ MB_ICONSTOP, nullptr)
 #define MBoxAssert(V) _ASSERTE(V)
-//__inline BOOL isMeForeground() {
-//	HWND h = GetForegroundWindow();
-//	return h && (h == ghWnd || h == ghOpWnd || h == ghConWnd);
-//}
-//#endif
-//#define isPressed(inp) ((GetKeyState(inp) & 0x8000) == 0x8000)
-//#define isDriveLetter(c) ((c>=L'A' && c<=L'Z') || (c>=L'a' && c<=L'z'))
-//#define isDigit(c) (c>=L'0' && c<=L'9')
-
-//#define PTDIFFTEST(C,D) (((abs(C.x-LOWORD(lParam)))<D) && ((abs(C.y-HIWORD(lParam)))<D))
-
-//#define INVALIDATE() InvalidateRect(HDCWND, NULL, FALSE)
-
-//#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
-//#define SafeFree(p) { if ((p)!=NULL) { LPVOID pp = (p); (p) = NULL; free(pp); } }
+#define AssertThis() if (this == nullptr) { _ASSERT(this!=nullptr); return; }
+#define AssertThisRet(dummy) if (this == nullptr) { _ASSERT(this!=nullptr); return (dummy); }
 
 #define isWheelEvent(messg) (((messg) == WM_MOUSEWHEEL) || ((messg) == WM_MOUSEHWHEEL/*0x020E*/))
 
@@ -226,18 +213,16 @@ void LogFocusInfo(LPCWSTR asInfo, int Level=1);
 
 bool PtMouseDblClickTest(const MSG& msg1, const MSG msg2);
 
-bool IntFromString(int& rnValue, LPCWSTR asValue, int anBase = 10, LPCWSTR* rsEnd = NULL);
+bool IntFromString(int& rnValue, LPCWSTR asValue, int anBase = 10, LPCWSTR* rsEnd = nullptr);
 bool GetDlgItemSigned(HWND hDlg, WORD nID, int& nValue, int nMin = 0, int nMax = 0);
 bool GetDlgItemUnsigned(HWND hDlg, WORD nID, DWORD& nValue, DWORD nMin = 0, DWORD nMax = 0);
-wchar_t* GetDlgItemTextPtr(HWND hDlg, WORD nID);
-template <size_t size> bool MyGetDlgItemText(HWND hDlg, WORD nID, wchar_t (&rszText)[size]);
-size_t MyGetDlgItemText(HWND hDlg, WORD nID, size_t& cchMax, wchar_t*& pszText/*, bool bEscapes = false*/);
-BOOL MySetDlgItemText(HWND hDlg, int nIDDlgItem, LPCTSTR lpString/*, bool bEscapes = false*/);
+CEStr GetDlgItemTextPtr(HWND hDlg, WORD nID);
+size_t MyGetDlgItemText(HWND hDlg, WORD nID, CEStr& rsText);
 bool GetColorRef(LPCWSTR pszText, COLORREF* pCR);
 
 //#pragma warning(disable: 4311) // 'type cast' : pointer truncation from 'HBRUSH' to 'BOOL'
 
-wchar_t* getFocusedExplorerWindowPath();
+CEStr getFocusedExplorerWindowPath();
 enum CESelectFileFlags
 {
 	sff_Default      = 0,
@@ -245,67 +230,17 @@ enum CESelectFileFlags
 	sff_Cygwin       = 2,
 	sff_SaveNewFile  = 4,
 };
-wchar_t* SelectFolder(LPCWSTR asTitle, LPCWSTR asDefFolder = NULL, HWND hParent = ghWnd, DWORD/*CESelectFileFlags*/ nFlags = sff_AutoQuote, CRealConsole* apRCon = NULL);
-wchar_t* SelectFile(LPCWSTR asTitle, LPCWSTR asDefFile = NULL, LPCWSTR asDefPath = NULL, HWND hParent = ghWnd, LPCWSTR asFilter = NULL, DWORD/*CESelectFileFlags*/ nFlags = sff_AutoQuote, CRealConsole* apRCon = NULL);
+CEStr SelectFolder(LPCWSTR asTitle, LPCWSTR asDefFolder = nullptr, HWND hParent = ghWnd, DWORD/*CESelectFileFlags*/ nFlags = sff_AutoQuote, CRealConsole* apRCon = nullptr);
+CEStr SelectFile(LPCWSTR asTitle, LPCWSTR asDefFile = nullptr, LPCWSTR asDefPath = nullptr, HWND hParent = ghWnd, LPCWSTR asFilter = nullptr, DWORD/*CESelectFileFlags*/ nFlags = sff_AutoQuote, CRealConsole* apRCon = nullptr);
 
 #include "../common/RConStartArgsEx.h"
 
 
 void RaiseTestException();
 
-//------------------------------------------------------------------------
-///| Registry |///////////////////////////////////////////////////////////
-//------------------------------------------------------------------------
-
-enum class StorageType : int
-{
-	BASIC,
-	REG,
-	XML,
-	INI,
-};
-
-struct SettingsStorage
-{
-	StorageType Type = StorageType::BASIC;
-	LPCWSTR     File = nullptr;   // NULL or full path to storage file
-	LPCWSTR     Config = nullptr; // Name of configuration
-	bool        ReadOnly = false; // If xml file is write-prohibited (created in "C:\Program Files"?)
-
-	static LPCWSTR getTypeName(const StorageType t)
-	{
-		return (t == StorageType::REG) ? L"[reg]"
-			: (t == StorageType::XML) ? L"[xml]"
-			: (t == StorageType::INI) ? L"[ini]"
-			: L"[basic]";
-	};
-	LPCWSTR getTypeName() const
-	{
-		return  getTypeName(Type);
-	};
-
-	bool isFileType() const
-	{
-		return (Type == StorageType::XML || Type == StorageType::INI);
-	};
-
-	bool hasFile() const
-	{
-		return isFileType() && (File && *File);
-	};
-
-	bool hasConfig() const
-	{
-		return (Config && *Config);
-	};
-};
-
-#define CONEMU_ROOT_KEY L"Software\\ConEmu"
-
-
 #define APP_MODEL_ID_PREFIX L"Maximus5.ConEmu."
 
-#include "Registry.h"
+#include "SettingsStorage.h"
 
 #include "../common/MRect.h"
 #include "../common/UnicodeChars.h"
@@ -459,14 +394,6 @@ enum ConEmuWindowMode
 
 LPCWSTR GetWindowModeName(ConEmuWindowMode wm);
 
-// Allow or not to convert pasted Windows path into Posix notation
-typedef BYTE PosixPasteMode;
-const PosixPasteMode
-	pxm_Convert    = 1,  // always try to convert
-	pxm_Intact     = 2,  // never convert
-	pxm_Auto       = 0   // autoselect on certain conditions and m_Args.pszMntRoot value
-;
-
 enum ExpandTextRangeType
 {
 	// Used for DblClick word selection, for example
@@ -581,128 +508,6 @@ enum CEPasteMode
 	pm_OneLine   = 2, // Paste all lines from the clipboard, but delimit them with SPACES (cmd-line safe!)
 };
 
-enum CESizeStyle
-{
-	ss_Standard = 0,
-	ss_Pixels   = 1,
-	ss_Percents = 2,
-};
-
-union CESize
-{
-	DWORD Raw;
-
-	struct
-	{
-		int         Value: 24;
-		CESizeStyle Style: 8;
-
-		wchar_t TempSZ[12];
-	};
-
-	const wchar_t* AsString()
-	{
-		switch (Style)
-		{
-		case ss_Pixels:
-			swprintf_c(TempSZ, L"%ipx", Value);
-			break;
-		case ss_Percents:
-			swprintf_c(TempSZ, L"%i%%", Value);
-			break;
-		//case ss_Standard:
-		default:
-			swprintf_c(TempSZ, L"%i", Value);
-		}
-		return TempSZ;
-	};
-
-	bool IsValid(bool IsWidth) const
-	{
-		bool bValid;
-		switch (Style)
-		{
-		case ss_Percents:
-			bValid = (Value >= 1 && Value <= 100);
-			break;
-		case ss_Pixels:
-			// Treat width/height as values for font size 4x2 (minimal)
-			if (IsWidth)
-				bValid = (Value >= (MIN_CON_WIDTH*4));
-			else
-				bValid = (Value >= (MIN_CON_HEIGHT*2));
-			break;
-		default:
-			if (IsWidth)
-				bValid = (Value >= MIN_CON_WIDTH);
-			else
-				bValid = (Value >= MIN_CON_HEIGHT);
-		}
-		return bValid;
-	};
-
-	bool Set(bool IsWidth, CESizeStyle NewStyle, int NewValue)
-	{
-		if (NewStyle == ss_Standard)
-		{
-			int nDef = IsWidth ? 80 : 25;
-			int nMax = IsWidth ? 1000 : 500;
-			if (NewValue <= 0) NewValue = nDef; else if (NewValue > nMax) NewValue = nMax;
-		}
-		else if (NewStyle == ss_Percents)
-		{
-			int nDef = IsWidth ? 50 : 30;
-			int nMax = 100;
-			if (NewValue <= 0) NewValue = nDef; else if (NewValue > nMax) NewValue = nMax;
-		}
-
-		if (!NewValue)
-		{
-			// Size can't be empty
-			_ASSERTE(NewValue);  // -V571
-			// Fail
-			return false;
-		}
-
-		Value = NewValue;
-		Style = NewStyle;
-		return true;
-	};
-
-	void SetFromRaw(bool IsWidth, DWORD aRaw)
-	{
-		CESize v; v.Raw = aRaw;
-		if (v.Style == ss_Standard || v.Style == ss_Pixels || v.Style == ss_Percents)
-		{
-			this->Set(IsWidth, v.Style, v.Value);
-		}
-	};
-
-	bool SetFromString(bool IsWidth, const wchar_t* sValue)
-	{
-		if (!sValue || !*sValue)
-			return false;
-		wchar_t* pszEnd = NULL;
-		// Try to convert
-		int NewValue = wcstol(sValue, &pszEnd, 10);
-		if (!NewValue)
-			return false;
-
-		CESizeStyle NewStyle = ss_Standard;
-		if (pszEnd)
-		{
-			switch (*SkipNonPrintable(pszEnd))
-			{
-			case L'%':
-				NewStyle = ss_Percents; break;
-			case L'p':
-				NewStyle = ss_Pixels; break;
-			}
-		}
-		// Done
-		return Set(IsWidth, NewStyle, NewValue);
-	};
-};
 
 // this is NOT a bitmask field!
 // only exact values are allowed!

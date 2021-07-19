@@ -38,86 +38,133 @@ struct CEStr
 public:
 	wchar_t *ms_Val = nullptr;
 private:
-	ssize_t mn_MaxCount = 0; // Including termination \0
+	ssize_t maxCount_ = 0; // Including termination \0
 
 private:
 	const wchar_t* AttachInt(wchar_t*& asPtr);
 
 public:
+	CEStr();
+	CEStr(CEStr&& asStr) noexcept;
+	CEStr(const CEStr& asStr);
+	CEStr(const wchar_t* asStr1, const wchar_t* asStr2 = nullptr, const wchar_t* asStr3 = nullptr,
+		const wchar_t* asStr4 = nullptr, const wchar_t* asStr5 = nullptr, const wchar_t* asStr6 = nullptr,
+		const wchar_t* asStr7 = nullptr, const wchar_t* asStr8 = nullptr, const wchar_t* asStr9 = nullptr);
+	CEStr(const wchar_t* asStr, ssize_t anChars);
+
+	CEStr& operator=(CEStr&& asStr) noexcept;
+	CEStr& operator=(const CEStr& asStr);
+	CEStr& operator=(const wchar_t* asPtr);
+
+	~CEStr();
+
+	bool IsEmpty() const;
+	bool IsNull() const;
+
 	operator const wchar_t*() const;
 	operator bool() const;
-	const wchar_t* c_str(const wchar_t* asNullSubstitute = NULL) const;
+	// ReSharper disable once CppInconsistentNaming
+	const wchar_t* c_str(const wchar_t* asNullSubstitute = nullptr) const;
+	// ReSharper disable once CppInconsistentNaming
+	wchar_t* data() const;
 	const wchar_t* Right(ssize_t cchMaxCount) const;
 	const wchar_t* Mid(ssize_t cchOffset) const;
 
 	int Compare(const wchar_t* asText, bool abCaseSensitive = false) const;
 	bool operator==(const wchar_t* asStr) const;
 
-	CEStr& operator=(CEStr&& asStr);
-	CEStr& operator=(const CEStr& asStr);
-	CEStr& operator=(wchar_t*&& asPtr);
-	CEStr& operator=(const wchar_t* asPtr);
-
-	void swap(CEStr& asStr);
+	void swap(CEStr& asStr) noexcept;
 
 	ssize_t GetLen() const;
 	ssize_t GetMaxCount();
 
+	/// <summary>
+	/// Returns a buffer capable to allocate <ref>cchMaxLen</ref> chars + zero-terminator.
+	/// </summary>
+	/// <param name="cchMaxLen">Required characters count without zero-terminator.</param>
+	/// <returns>Allocated buffer or nullptr</returns>
 	wchar_t* GetBuffer(ssize_t cchMaxLen);
 	wchar_t* Detach();
-	const wchar_t*  Attach(wchar_t* RVAL_REF asPtr);
-	const wchar_t*  Append(const wchar_t* asStr1, const wchar_t* asStr2 = NULL, const wchar_t* asStr3 = NULL, const wchar_t* asStr4 = NULL, const wchar_t* asStr5 = NULL, const wchar_t* asStr6 = NULL, const wchar_t* asStr7 = NULL, const wchar_t* asStr8 = NULL);
+	void Swap(wchar_t*& asPtr);
+	const wchar_t*  Attach(wchar_t*&& asPtr);
+	const wchar_t*  Append(const wchar_t* asStr1, const wchar_t* asStr2 = nullptr, const wchar_t* asStr3 = nullptr,
+		const wchar_t* asStr4 = nullptr, const wchar_t* asStr5 = nullptr, const wchar_t* asStr6 = nullptr,
+		const wchar_t* asStr7 = nullptr, const wchar_t* asStr8 = nullptr);
+	CEStr& Replace(const wchar_t* what, const wchar_t* newText);
+	/// @brief If string allocated, make it zero-length.
 	void Clear();
-	void Empty();
-	bool IsEmpty() const;
+	/// @brief Release allocated memory, so the object contains nullptr afterwards.
+	void Release();
+	/// @brief Assigns asNewValue, possibly limited to anChars
 	const wchar_t* Set(const wchar_t* asNewValue, ssize_t anChars = -1);
+	/// @brief Sets the character wc at position nIdx
+	/// @returns Previous character at position nIdx
 	wchar_t SetAt(const ssize_t nIdx, const wchar_t wc);
-
-	CEStr();
-	CEStr(CEStr&& asStr);
-	CEStr(const CEStr& asStr);
-	CEStr(wchar_t*&& asPtr);
-	CEStr(const wchar_t* asStr1, const wchar_t* asStr2 = NULL, const wchar_t* asStr3 = NULL, const wchar_t* asStr4 = NULL, const wchar_t* asStr5 = NULL, const wchar_t* asStr6 = NULL, const wchar_t* asStr7 = NULL, const wchar_t* asStr8 = NULL, const wchar_t* asStr9 = NULL);
-	~CEStr();
 };
 
-// Minimalistic storage for ANSI/UTF8 strings
+
+/// <summary>
+/// Minimalistic storage for ANSI/UTF8 strings
+/// </summary>
 struct CEStrA
 {
 public:
 	CEStrA();
+	~CEStrA();
 	CEStrA(const char* asPtr);
-	CEStrA(char*&& asPtr);
+	CEStrA(const char* asStr1, const char* asStr2, const char* asStr3 = nullptr,
+		const char* asStr4 = nullptr, const char* asStr5 = nullptr, const char* asStr6 = nullptr,
+		const char* asStr7 = nullptr, const char* asStr8 = nullptr, const char* asStr9 = nullptr);
 
 	CEStrA(const CEStrA& src);
-	CEStrA(CEStrA&& src);
+	CEStrA(CEStrA&& src) noexcept;
 
 	CEStrA& operator=(const char* asPtr);
-	CEStrA& operator=(char*&& asPtr);
 
 	CEStrA& operator=(const CEStrA& src);
-	CEStrA& operator=(CEStrA&& src);
+	CEStrA& operator=(CEStrA&& src) noexcept;
 
 	operator const char*() const;
 	operator bool() const;
-	const char* c_str(const char* asNullSubstitute = NULL) const;
-	ssize_t length() const;
-	void clear();
+	// ReSharper disable once CppInconsistentNaming
+	const char* c_str(const char* asNullSubstitute = nullptr) const;
+	// ReSharper disable once CppInconsistentNaming
+	char* data() const;
+	ssize_t GetLen() const;
+	ssize_t GetMaxCount();
+	void Clear();
+	void Release();
 
-	char* getbuffer(ssize_t cchMaxLen);
-	char* release();
+	const char* Set(const char* asNewValue, ssize_t anChars = -1);
+	char SetAt(const ssize_t nIdx, const char chr);
+
+	// Reset the buffer to new empty data of required size
+	char* GetBuffer(ssize_t cchMaxLen);
+	char* Detach();
+	char* Attach(char*&& asPtr);
 
 public:
 	char* ms_Val = nullptr;
+private:
+	ssize_t maxCount_ = 0; // Including termination \0
 };
 
-// Implements string concatenation
+
+/// <summary>
+/// Implements string concatenation
+/// </summary>
+// ReSharper disable once CppInconsistentNaming
 class CEStrConcat
 {
 private:
 	MArray<std::pair<ssize_t, CEStr>> strings_;
 	ssize_t total_ = 0;
 public:
+	void Reserve(ssize_t strCount);
 	void Append(const wchar_t* str);
+	void Append(CEStr&& str);
 	CEStr GetData() const;
+	bool IsEmpty() const;
+	ssize_t GetCount() const;
+	CEStr& GetString(ssize_t idx);
 };

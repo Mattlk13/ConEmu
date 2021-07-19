@@ -28,31 +28,56 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <Windows.h>
+#include <windows.h>
 
+// Wrapper for LoadLibrary and GetProcAddress.
+// Note that is used for declaring global variables, so the class
+// should stay exit-time-destructors compliant.
 class MModule
 {
 protected:
-	HMODULE mh_Module;
+	// Warning!!! DON'T declare or use here any classes (e.g. CEStr) which utilizes heap!
+
+	// Result of GetModuleHandle or LoadLibrary
+	HMODULE moduleHandle_ = nullptr;
+	
 	#ifdef _DEBUG
-	wchar_t ms_Module[MAX_PATH];
+	// Module path for debugging purposes
+	wchar_t moduleName_[MAX_PATH] = L"";
 	#endif
-	bool    mb_Loaded;
+
+	// true if mh_Module is from GetModuleHandle so we don't need to call FreeLibrary
+	bool    selfLoaded_ = false;
+
+	// last error on API call
+	mutable DWORD lastError_ = 0;
+	
 public:
 	MModule();
-	MModule(LPCWSTR asModule);
-	MModule(HMODULE ahModule);
+	explicit MModule(const wchar_t* asModule);
+	explicit MModule(HMODULE ahModule);
+
+	MModule(const MModule&) = delete;
+	MModule(MModule&&) noexcept;
+	MModule& operator=(const MModule&) = delete;
+	MModule& operator=(MModule&&) noexcept;
+	
 	~MModule();
 public:
 	void Free();
-	HMODULE Load(LPCWSTR asModule);
+	HMODULE Load(const wchar_t* asModule);
+	bool SetHandle(HMODULE hModule);
 public:
-	template <typename FUNCTIONTYPE>
-	bool GetProcAddress(LPCSTR asFunction, FUNCTIONTYPE*& pfn) const
+	template <typename FunctionType>
+	bool GetProcAddress(const char * const asFunction, FunctionType*& pfn) const
 	{
-		pfn = mh_Module ? (FUNCTIONTYPE*)::GetProcAddress(mh_Module, asFunction) : NULL;
-		return (pfn != NULL);
+		pfn = moduleHandle_ ? reinterpret_cast<FunctionType*>(::GetProcAddress(moduleHandle_, asFunction)) : nullptr;
+		lastError_ = pfn ? 0 : GetLastError();
+		return (pfn != nullptr);
 	};
 public:
-	operator HMODULE();
+	explicit operator HMODULE() const;
+	bool operator!() const;
+	// Checks if module handle is not null
+	bool IsValid() const;
 };

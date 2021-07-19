@@ -38,12 +38,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #undef MVALIDATE_POINTERS
 #else
 #if defined(_DEBUG) || (ConEmuVersionStage == CEVS_ALPHA)
-#define TRACK_MEMORY_ALLOCATIONS
+//#define TRACK_MEMORY_ALLOCATIONS
 #endif
 #if defined(_DEBUG) || defined(TRACK_MEMORY_ALLOCATIONS)
 // #define MVALIDATE_POINTERS
 #endif
 #endif
+
 
 // Heap allocation routines
 
@@ -81,14 +82,14 @@ void __cdecl operator delete[](void *ptr);
 	#define XF_PLACE_ARGS_VAL
 #endif
 
-#if defined(__CYGWIN__)
+#if defined(__CYGWIN__) || defined(__MINGW32__)
 extern "C" {
 #endif
 void * __cdecl xf_malloc(size_t _Size XF_PLACE_ARGS_DEF);
 void * __cdecl xf_calloc(size_t _Count, size_t _Size XF_PLACE_ARGS_DEF);
 void * __cdecl xf_realloc(void * _Memory, size_t _Size XF_PLACE_ARGS_DEF);
 void __cdecl xf_free(void * _Memory XF_PLACE_ARGS_DEF);
-#if defined(__CYGWIN__)
+#if defined(__CYGWIN__) || defined(__MINGW32__)
 }
 #endif
 
@@ -164,7 +165,7 @@ void SafeDelete(T*& p)
 {
 	if (!p) return;
 
-	_ASSERTE(g_LastDeletePtr != (void*)p);
+	//_ASSERTE(g_LastDeletePtr != (void*)p);
 	g_LastDeletePtr = (void*)p;
 
 	#if defined(_DEBUG) || defined(TRACK_MEMORY_ALLOCATIONS) || defined(MVALIDATE_POINTERS)

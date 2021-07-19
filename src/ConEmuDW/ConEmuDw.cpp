@@ -156,7 +156,7 @@ BOOL LoadFarVersion()
 
 // Dummy external requirement for FileExistsSearch.
 // But it's better to splite FileExistsSearch code...
-bool SearchAppPaths(wchar_t const *,struct CEStr &,bool,struct CEStr *)
+bool SearchAppPaths(wchar_t const*, struct CEStr&, bool, struct CEStr*)
 {
 	return false;
 }
@@ -198,12 +198,12 @@ BOOL WINAPI DllMain(HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved
 
 			}
 			break;
-		
+
 		case DLL_THREAD_ATTACH:
 			break;
 		case DLL_THREAD_DETACH:
 			break;
-		
+
 		case DLL_PROCESS_DETACH:
 			{
 				CloseBuffers();
@@ -256,7 +256,7 @@ BOOL WINAPI _DllMainCRTStartup(HANDLE hDll,DWORD dwReason,LPVOID lpReserved)
 bool isCharSpace(wchar_t inChar)
 {
 	// Сюда пихаем все символы, которые можно отрисовать пустым фоном (как обычный пробел)
-	bool isSpace = (inChar == ucSpace || inChar == ucNoBreakSpace || inChar == 0 
+	bool isSpace = (inChar == ucSpace || inChar == ucNoBreakSpace || inChar == 0
 		/*|| (inChar>=0x2000 && inChar<=0x200F)
 		|| inChar == 0x2060 || inChar == 0x3000 || inChar == 0xFEFF*/);
 	return isSpace;
@@ -266,11 +266,11 @@ bool isCharSpace(wchar_t inChar)
 BOOL GetBufferInfo(HANDLE &h, CONSOLE_SCREEN_BUFFER_INFO &csbi, SMALL_RECT &srWork)
 {
 	_ASSERTE(gbInitialized);
-	
+
 	h = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (!GetConsoleScreenBufferInfo(h, &csbi))
 		return FALSE;
-	
+
 	if (gbFarBufferMode)
 	{
 		// Фар занимает нижнюю часть консоли. Прилеплен к левому краю
@@ -288,13 +288,13 @@ BOOL GetBufferInfo(HANDLE &h, CONSOLE_SCREEN_BUFFER_INFO &csbi, SMALL_RECT &srWo
 		srWork.Right = csbi.dwSize.X - 1;
 		srWork.Bottom = csbi.dwSize.Y - 1;
 	}
-	
+
 	if (srWork.Left < 0 || srWork.Top < 0 || srWork.Left > srWork.Right || srWork.Top > srWork.Bottom)
 	{
 		_ASSERTE(srWork.Left >= 0 && srWork.Top >= 0 && srWork.Left <= srWork.Right && srWork.Top <= srWork.Bottom);
 		return FALSE;
 	}
-	
+
 	return TRUE;
 }
 
@@ -310,7 +310,7 @@ int WINAPI RequestLocalServer(/*[IN/OUT]*/RequestLocalServerParm* Parm)
 	HMODULE hHkDll = NULL;
 	RequestLocalServer_t fRequestLocalServer = NULL;
 	wchar_t *pszSlash, szFile[MAX_PATH+1] = {};
-	LPCWSTR pszSrvName = WIN3264TEST(L"ConEmuHk.dll",L"ConEmuHk64.dll");
+	LPCWSTR pszSrvName = ConEmuHk_DLL_3264;
 
 	GetModuleFileName(ghOurModule, szFile, MAX_PATH);
 	pszSlash = wcsrchr(szFile, L'\\');
@@ -367,7 +367,7 @@ BOOL CheckBuffers(bool abWrite /*= false*/)
 	}
 
 	// Проверить, не изменился ли HWND окна отрисовки (DC)...
-	HWND hCon = GetConEmuHWND(0);
+	HWND hCon = GetConEmuHWND(ConEmuWndType::GuiDcWindow);
 	if (!hCon)
 	{
 		CloseBuffers();
@@ -376,20 +376,21 @@ BOOL CheckBuffers(bool abWrite /*= false*/)
 	}
 	if (hCon != ghVConWnd)
 	{
+		ghRConWnd = GetConEmuHWND(ConEmuWndType::ConsoleWindow);
+
 		#ifdef _DEBUG
 		// Even with minhook GetConsoleWindow must be set to trampolined function
-		HWND hApiCon = GetConsoleWindow();
-		HWND hRealCon = GetConEmuHWND(2);
-		HWND hRootWnd = GetConEmuHWND(1);
+		auto* const hApiCon = GetConsoleWindow();
+		auto* const hRealCon = ghRConWnd;
+		// ReSharper disable once CppDeclaratorNeverUsed
+		auto* const hRootWnd = GetConEmuHWND(ConEmuWndType::GuiMainWindow);
 		_ASSERTE(hApiCon == hRealCon);
 		#endif
-
-		ghRConWnd = GetConEmuHWND(2);
 
 		ghVConWnd = hCon;
 		CloseBuffers();
 
-		
+
 		//TODO: Пока работаем "по-старому", через буфер TrueColor. Переделать, он не оптимален
 		RequestLocalServerParm prm = {sizeof(prm), slsf_RequestTrueColor|slsf_GetCursorEvent|slsf_GetFarCommitEvent};
 		int iFRc = RequestLocalServer(&prm);
@@ -432,7 +433,7 @@ BOOL CheckBuffers(bool abWrite /*= false*/)
 		//		ghFarCommitUpdateSrv = prm.hFarCommitEvent;
 		//	}
 		}
-		
+
 		#ifdef USE_COMMIT_EVENT
 		if (!LoadSrvMapping(ghRConWnd, SrvMapping))
 		{
@@ -449,19 +450,19 @@ BOOL CheckBuffers(bool abWrite /*= false*/)
 			//TODO: Сбросить флаги валидности ячеек?
 			gpTrueColor->locked = TRUE;
 		}
-		
+
 		#ifdef USE_COMMIT_EVENT
 		if (!gbBatchStarted)
 		{
 			gbBatchStarted = true;
-			
+
 			if (!ghBatchEvent)
 				ghBatchEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-				
+
 			if (ghBatchEvent)
 			{
 				ResetEvent(ghBatchEvent);
-				
+
 				// Если еще не регистрировались...
 				if (!gnBatchRegPID || gnBatchRegPID != SrvMapping.nServerPID)
 				{
@@ -485,12 +486,12 @@ BOOL CheckBuffers(bool abWrite /*= false*/)
 						ExecuteFreeResult(pIn);
 					}
 				}
-				
+
 			}
 		}
 		#endif
 	}
-	
+
 	return (gpTrueColor!=NULL);
 }
 
@@ -532,7 +533,7 @@ void CloseBuffers()
 //		int G = (Color & 0xFF00) >> 8;
 //		int R = (Color & 0xFF);
 //		int nMax = Max(B,Max(R,G));
-//		
+//
 //		Index =
 //			(((B+32) > nMax) ? 1 : 0) |
 //			(((G+32) > nMax) ? 2 : 0) |
@@ -604,14 +605,14 @@ void CloseBuffers()
 //		else
 //			Con |= 8;
 //	}
-//	
+//
 //	Con |= (Index<<4);
 //}
 
 //TODO: Юзкейс понят неправильно.
-//TODO: Это не "всего видимого экрана", это "цвет по умолчанию". То, что соответствует 
+//TODO: Это не "всего видимого экрана", это "цвет по умолчанию". То, что соответствует
 //TODO: "Screen Text" и "Screen Background" в свойствах консоли. То, что задаётся командой
-//TODO: color в cmd.exe. То, что будет использовано если в консоль просто писать 
+//TODO: color в cmd.exe. То, что будет использовано если в консоль просто писать
 //TODO: по printf/std::cout/WriteConsole, без явного указания цвета.
 BOOL WINAPI GetTextAttributes(FarColor* Attributes)
 {
@@ -622,7 +623,7 @@ BOOL WINAPI GetTextAttributes(FarColor* Attributes)
 
 	BOOL lbTrueColor = CheckBuffers();
 	UNREFERENCED_PARAMETER(lbTrueColor);
-	
+
 	CONSOLE_SCREEN_BUFFER_INFO csbi = {};
 	SMALL_RECT srWork = {};
 	HANDLE h;
@@ -650,7 +651,7 @@ BOOL WINAPI GetTextAttributes(FarColor* Attributes)
 	}
 
 	return TRUE;
-	
+
 	//WORD nDefReadBuf[1024];
 	//WORD *pnReadAttr = NULL;
 	//int nBufWidth  = csbi.srWindow.Right - csbi.srWindow.Left + 1;
@@ -688,7 +689,7 @@ BOOL WINAPI GetTextAttributes(FarColor* Attributes)
 	//			_ASSERTE(pTrueColor && pTrueColor < pTrueColorEnd);
 	//			pTrueColor = NULL; // Выделенный буфер оказался недостаточным
 	//		}
-	//		
+	//
 	//		if (pTrueColor)
 	//		{
 	//			DWORD Style = pTrueColor->style;
@@ -728,7 +729,7 @@ BOOL WINAPI GetTextAttributes(FarColor* Attributes)
 	//
 	//if (pnReadAttr != nDefReadBuf)
 	//	free(pnReadAttr);
-	
+
 	//return lbRc;
 }
 
@@ -778,9 +779,9 @@ WORD Far2ConEmuColor(const FarColor* Attributes, AnnotationInfo& t)
 }
 
 //TODO: Юзкейс понят неправильно.
-//TODO: Это не "всего видимого экрана", это "цвет по умолчанию". То, что соответствует 
+//TODO: Это не "всего видимого экрана", это "цвет по умолчанию". То, что соответствует
 //TODO: "Screen Text" и "Screen Background" в свойствах консоли. То, что задаётся командой
-//TODO: color в cmd.exe. То, что будет использовано если в консоль просто писать 
+//TODO: color в cmd.exe. То, что будет использовано если в консоль просто писать
 //TODO: по printf/std::cout/WriteConsole, без явного указания цвета.
 BOOL WINAPI SetTextAttributes(const FarColor* Attributes)
 {
@@ -804,7 +805,7 @@ BOOL WINAPI SetTextAttributes(const FarColor* Attributes)
 	HANDLE h;
 	if (!GetBufferInfo(h, csbi, srWork))
 		return FALSE;
-	
+
 	//WORD nDefWriteBuf[1024];
 	//WORD *pnWriteAttr = NULL;
 	//int nBufWidth  = srWork.Right - srWork.Left + 1;
@@ -819,11 +820,11 @@ BOOL WINAPI SetTextAttributes(const FarColor* Attributes)
 	//	SetLastError(E_OUTOFMEMORY);
 	//	return FALSE;
 	//}
-	
+
 	BOOL lbRc = TRUE;
 	//COORD cr = {srWork.Left, srWork.Top};
 	//DWORD nWritten;
-	
+
 	#ifdef _DEBUG
 	AnnotationInfo* pTrueColor = (AnnotationInfo*)(gpTrueColor ? (((LPBYTE)gpTrueColor) + gpTrueColor->struct_size) : NULL);
 	AnnotationInfo* pTrueColorEnd = pTrueColor ? (pTrueColor + gpTrueColor->bufferSize) : NULL;
@@ -857,19 +858,19 @@ BOOL WINAPI SetTextAttributes(const FarColor* Attributes)
 	//	if (!WriteConsoleOutputAttribute(h, pnWriteAttr, nBufWidth, cr, &nWritten) || (nWritten != nBufWidth))
 	//		lbRc = FALSE;
 	//}
-	
+
 	SetConsoleTextAttribute(h, n);
-	
+
 	TODO("По хорошему, gCurrentAttr нада ветвить по разным h");
 	// запомнить, что WriteConsole должен писать атрибутом "t"
 	gCurrentAttr.WasSet = true;
 	gCurrentAttr.CONColor = n;
 	gCurrentAttr.FARColor = *Attributes;
 	gCurrentAttr.CEColor = t;
-	
+
 	//if (pnWriteAttr != nDefWriteBuf)
 	//	free(pnWriteAttr);
-	
+
 	return lbRc;
 }
 
@@ -1013,7 +1014,7 @@ BOOL WINAPI ReadOutput(FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoor
 			Y1 = 0;
 		lbRc = FALSE;
 	}
-	
+
 	for (rcRead.Top = Y1; rcRead.Top <= Y2; rcRead.Top++)
 	{
 		rcRead.Bottom = rcRead.Top;
@@ -1049,7 +1050,7 @@ BOOL WINAPI ReadOutput(FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoor
 				if (Style & AI_STYLE_UNDERLINE)
 					chr.Attributes.Flags |= FCF_FG_UNDERLINE;
 			}
-			
+
 			if (pTrueColor && pTrueColor->fg_valid)
 			{
 				chr.Attributes.ForegroundColor = pTrueColor->fg_color;
@@ -1186,7 +1187,7 @@ BOOL WINAPI WriteOutput(const FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD Buf
 			Y1 = 0;
 		lbRc = FALSE;
 	}
-	
+
 	for (rcWrite.Top = Y1; rcWrite.Top <= Y2; rcWrite.Top++)
 	{
 		rcWrite.Bottom = rcWrite.Top;
@@ -1211,11 +1212,11 @@ BOOL WINAPI WriteOutput(const FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD Buf
 				#endif
 				pTrueColor = NULL; // Выделенный буфер оказался недостаточным
 			}
-			
+
 			WORD n = 0, f = 0;
 			unsigned __int64 Flags = pFar->Attributes.Flags;
 			BOOL Fore4bit = (Flags & FCF_FG_4BIT);
-			
+
 			if (pTrueColor)
 			{
 				if (Flags & FCF_FG_BOLD)
@@ -1247,7 +1248,7 @@ BOOL WINAPI WriteOutput(const FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD Buf
 					pTrueColor->fg_valid = TRUE;
 				}
 			}
-			
+
 			if (Flags & FCF_BG_4BIT)
 			{
 				nBackColor = -1;
@@ -1277,15 +1278,15 @@ BOOL WINAPI WriteOutput(const FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD Buf
 					pTrueColor->bk_valid = TRUE;
 				}
 			}
-			
-			
-			
+
+
+
 			pc->Attributes = n;
 
 			if (pTrueColor)
 				pTrueColor++;
 		}
-		
+
 		if (PreWriteCallBack)
 		{
 			SETARGS5(&lbRc, h, pcWriteBuf, &MyBufferSize, &MyBufferCoord, &rcWrite);
@@ -1406,7 +1407,7 @@ BOOL WINAPI WriteText(HANDLE hConsoleOutput, const AnnotationInfo* Attributes, c
 
 	if (!fnWriteConsoleW)
 	{
-		HANDLE hHooks = GetModuleHandle(WIN3264TEST(L"ConEmuHk.dll",L"ConEmuHk64.dll"));
+		HANDLE hHooks = GetModuleHandle(ConEmuHk_DLL_3264);
 		if (hHooks)
 		{
 			GetWriteConsoleW_t getf = (GetWriteConsoleW_t)GetProcAddress(hHooks, "GetWriteConsoleW");
@@ -1429,7 +1430,7 @@ BOOL WINAPI WriteText(HANDLE hConsoleOutput, const AnnotationInfo* Attributes, c
 			fnWriteConsoleW = WriteConsole;
 		}
 	}
-	
+
 	lbRc = fnWriteConsoleW(hConsoleOutput, Buffer, nNumberOfCharsToWrite, lpNumberOfCharsWritten,NULL);
 	#endif
 
@@ -1459,7 +1460,7 @@ BOOL WINAPI Commit()
 		// Разрешить передернуть сервер
 		SetEvent(ghFarCommitUpdateSrv);
 	}
-	
+
 	if (PostWriteCallBack)
 	{
 		SETARGS(nullptr);
@@ -1472,7 +1473,7 @@ BOOL WINAPI Commit()
 		SetEvent(ghBatchEvent);
 	gbBatchStarted = false;
 	#endif
-	
+
 	return TRUE; //TODO: А чего возвращать-то?
 }
 
@@ -1507,10 +1508,10 @@ struct ColorParam
 	BOOL bBackTransparent, bForeTransparent;
 	COLORREF crBackColor, crForeColor;
 	HBRUSH hbrBackground;
-	
+
 	LOGFONT lf;
 	HFONT hFont;
-	
+
 	void CreateBrush()
 	{
 		if (hbrBackground)
@@ -1518,7 +1519,7 @@ struct ColorParam
 		//hbrBackground = CreateSolidBrush(bBackTransparent ? GetSysColor(COLOR_BTNFACE) : crBackColor);
 		hbrBackground = CreateSolidBrush(crBackColor);
 	}
-	
+
 	void RecreateFont(HWND hStatic)
 	{
 		if (hFont)
@@ -1572,7 +1573,7 @@ struct ColorParam
 	void Ref2Far(BOOL Transparent, COLORREF cr, BOOL Foreground, FarColor* p)
 	{
 		uint32_t color = BareRgbColor(cr);
-		
+
 		if (Foreground ? b4bitfore : b4bitback)
 		{
 			//int Change = -1;
@@ -1598,7 +1599,7 @@ struct ColorParam
 			//	Color = Change;
 			//}
 		}
-		
+
 		if (Foreground)
 		{
 			if (Foreground ? b4bitfore : b4bitback)
@@ -1670,7 +1671,7 @@ INT_PTR CALLBACK ColorDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM 
 		CheckDlgButton(hwndDlg, IDC_UNDERLINE, P->bUnderline ? BST_CHECKED : BST_UNCHECKED);
 		// Заполнить поле буковками
 		SetDlgItemText(hwndDlg, IDC_TEXT, L"Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text Text");
-		
+
 		NONCLIENTMETRICS ncm = {sizeof(ncm)};
 		SystemParametersInfo(SPI_GETNONCLIENTMETRICS, (UINT)sizeof(NONCLIENTMETRICS), &ncm, 0);
 		//P->lf = ncm.lfMessageFont;
@@ -1694,7 +1695,7 @@ INT_PTR CALLBACK ColorDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM 
 		}
 
 		SetFocus(GetDlgItem(hwndDlg, IDOK));
-		
+
 		RECT rcDlg; GetWindowRect(hwndDlg, &rcDlg);
 		//TODO: Пока тестируем с консолью...
 		//TODO: Обработка P->Center
@@ -1923,7 +1924,7 @@ int  WINAPI GetColorDialog(FarColor* Color, BOOL Centered, BOOL AddTransparent)
 	//TODO: + два (опциональных) флажка "Transparent" (и для фона и для текста)
 	//TODO: ChooseColor дергать по кнопкам "&Background color" "&Text color"
 
-	ColorParam Parm = {*Color, 
+	ColorParam Parm = {*Color,
 		FALSE/*bTrueColorEnabled*/,
 		(Color->Flags & FCF_FG_4BIT)==FCF_FG_4BIT/*b4bitfore*/,
 		(Color->Flags & FCF_BG_4BIT)==FCF_BG_4BIT/*b4bitback*/,
@@ -1945,10 +1946,10 @@ int  WINAPI GetColorDialog(FarColor* Color, BOOL Centered, BOOL AddTransparent)
 	{
 		Parm.bForeTransparent = Parm.bBackTransparent = FALSE;
 	}
-	
+
 	// Заменить на дескриптор окна GUI
-	Parm.hConsole = GetConEmuHWND(1);
-	
+	Parm.hConsole = GetConEmuHWND(ConEmuWndType::GuiMainWindow);
+
 	// Найти HWND GUI
 	wchar_t szMapName[128];
 	wsprintf(szMapName, CECONMAPNAME, LODWORD(Parm.hConsole)); //-V205
@@ -1975,10 +1976,10 @@ int  WINAPI GetColorDialog(FarColor* Color, BOOL Centered, BOOL AddTransparent)
 			else
 #endif
 			if ((pHdr->cbSize < sizeof(*pHdr))
-				|| (pHdr->nProtocolVersion != CESERVER_REQ_VER) 
+				|| (pHdr->nProtocolVersion != CESERVER_REQ_VER)
 				|| !IsWindow(pHdr->hConEmuWndDc))
 			{
-				if ((pHdr->cbSize >= sizeof(*pHdr)) 
+				if ((pHdr->cbSize >= sizeof(*pHdr))
 					&& pHdr->hConEmuWndDc && IsWindow(pHdr->hConEmuWndDc)
 					&& IsWindowVisible(pHdr->hConEmuWndDc))
 				{
@@ -1993,7 +1994,7 @@ int  WINAPI GetColorDialog(FarColor* Color, BOOL Centered, BOOL AddTransparent)
 			{
 				Parm.hGUI = pHdr->hConEmuWndDc; // DC
 				Parm.hGUIRoot = pHdr->hConEmuRoot; // Main window
-				if (!(pHdr->Flags & CECF_UseTrueColor))
+				if (!(pHdr->Flags & ConEmu::ConsoleFlags::UseTrueColor))
 				{
 					MessageBoxA(NULL, MSG_TRUEMOD_DISABLED, MSG_TITLE, MB_ICONSTOP|MB_SYSTEMMODAL);
 				}
@@ -2010,7 +2011,7 @@ int  WINAPI GetColorDialog(FarColor* Color, BOOL Centered, BOOL AddTransparent)
 		}
 		CloseHandle(hMap);
 	}
-	
+
 	if (!Parm.hGUI && !IsWindowVisible(Parm.hConsole))
 	{
 		SystemParametersInfo(SPI_GETWORKAREA, 0, &Parm.rcParent, 0);
@@ -2020,11 +2021,11 @@ int  WINAPI GetColorDialog(FarColor* Color, BOOL Centered, BOOL AddTransparent)
 		GetClientRect(Parm.hGUI ? Parm.hGUI : Parm.hConsole, &Parm.rcParent);
 		MapWindowPoints(Parm.hGUI ? Parm.hGUI : Parm.hConsole, NULL, (POINT*)&Parm.rcParent, 2);
 	}
-	
+
 	int nRc = 0;
 	LPCWSTR pszTitle = L"ConEmu Colors";
 	LPCWSTR pszText = L"Executing GUI dialog";
-	
+
 	FAR_CHAR_INFO* SaveBuffer = NULL;
 	FAR_CHAR_INFO* WriteBuffer = NULL;
 	SMALL_RECT Region = {0, 0, 0, 0};
@@ -2046,7 +2047,7 @@ int  WINAPI GetColorDialog(FarColor* Color, BOOL Centered, BOOL AddTransparent)
 
 		SaveBuffer = (FAR_CHAR_INFO*)calloc(nWidth*nHeight, sizeof(*SaveBuffer)); //-V106
 		WriteBuffer = (FAR_CHAR_INFO*)calloc(nWidth*nHeight, sizeof(*WriteBuffer)); //-V106
-		
+
 		if (!SaveBuffer || !WriteBuffer)
 		{
 			if (SaveBuffer)
@@ -2147,13 +2148,13 @@ int  WINAPI GetColorDialog(FarColor* Color, BOOL Centered, BOOL AddTransparent)
 			}
 		}
 
-		//TODO: Возможно здесь стоит вставить какой-то обработчик, 
+		//TODO: Возможно здесь стоит вставить какой-то обработчик,
 		//TODO: чтобы из консоли можно было остановить GUI диалог
 		WaitForSingleObject(hThread, INFINITE);
-		
-		
+
+
 		GetExitCodeThread(hThread, (LPDWORD)&nRc);
-		
+
 		if (nRc == 1)
 		{
 			Parm.Ref2Far(Parm.bForeTransparent, Parm.crForeColor, TRUE, Color);

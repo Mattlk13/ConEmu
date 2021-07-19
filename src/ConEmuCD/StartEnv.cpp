@@ -37,7 +37,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Actions.h"
 #include "StartEnv.h"
 
-wchar_t* gpszForcedTitle = NULL;
+
+#include "../common/WObjects.h"
+#include "../ConEmuHk/SetHook.h"
+
+wchar_t* gpszForcedTitle = nullptr;
 
 // old-issues#60: On some systems (Win2k3, WinXP) SetConsoleCP and SetConsoleOutputCP just hangs!
 // That's why we call them in background thread, and if it hangs - TerminateThread it.
@@ -90,16 +94,16 @@ CStartEnv::~CStartEnv()
 
 void CStartEnv::Alias(LPCWSTR asName, LPCWSTR asValue)
 {
-	// NULL will remove alias
+	// nullptr will remove alias
 	// We set aliases for "cmd.exe" executable, as Far Manager supports too
 	wchar_t szExe[] = L"cmd.exe";
 	// MSDN tells LPCWSTR, but SDK defines the function as LPWSTR
-	AddConsoleAlias((LPWSTR)asName, (asValue && *asValue) ? (LPWSTR)asValue : NULL, szExe);
+	AddConsoleAlias((LPWSTR)asName, (asValue && *asValue) ? (LPWSTR)asValue : nullptr, szExe);
 }
 
 void CStartEnv::ChCp(LPCWSTR asCP)
 {
-	UINT nCP = GetCpFromString(asCP);
+	const UINT nCP = GetCpFromString(asCP);
 	if (nCP > 0 && nCP <= 0xFFFF)
 	{
 		//Issue 60: BUGBUG: On some OS versions (Win2k3, WinXP) SetConsoleCP (and family) just hangs
@@ -109,8 +113,8 @@ void CStartEnv::ChCp(LPCWSTR asCP)
 
 void CStartEnv::Echo(LPCWSTR asSwitches, LPCWSTR asText)
 {
-	CEStr lsFull = lstrmerge(asSwitches, (asSwitches && *asSwitches) ? L" " : NULL, L"\"", asText, L"\"");
-	DoOutput(ea_OutEcho, lsFull);
+	const CEStr lsFull(asSwitches, (asSwitches && *asSwitches) ? L" " : nullptr, L"\"", asText, L"\"");
+	DoOutput(ConEmuExecAction::OutEcho, lsFull);
 }
 
 void CStartEnv::Set(LPCWSTR asName, LPCWSTR asValue)
@@ -130,7 +134,7 @@ void CStartEnv::Set(LPCWSTR asName, LPCWSTR asValue)
 		{
 			// Example: PATH=%ConEmuBaseDir%\Scripts;%PATH%;C:\Tools\Arc
 			CEStr lsSelfName(L"%", asName, L"%");
-			wchar_t* pchName = lsSelfName.IsEmpty() ? NULL : StrStrI(asValue, lsSelfName);
+			wchar_t* pchName = lsSelfName.IsEmpty() ? nullptr : StrStrI(asValue, lsSelfName);
 			if (pchName)
 			{
 				bool bDiffFound = false;
@@ -155,7 +159,7 @@ void CStartEnv::Set(LPCWSTR asName, LPCWSTR asValue)
 				{
 					CEStr lsNewSuffix;
 					lsNewSuffix.Set(pchName+iSelfLen);
-					INT_PTR iSLen = lsNewSuffix.GetLen();
+					const INT_PTR iSLen = lsNewSuffix.GetLen();
 					iCmp = (iCurLen >= iSLen && iSLen > 0)
 						? wcsncmp(lsCurValue.c_str() + iCurLen - iSLen, lsNewSuffix, iSLen)
 						: -1;
@@ -172,10 +176,9 @@ void CStartEnv::Set(LPCWSTR asName, LPCWSTR asValue)
 	}
 
 	// Expand value
-	wchar_t* pszExpanded = ExpandEnvStr(asValue);
-	LPCWSTR pszSet = pszExpanded ? pszExpanded : asValue;
-	SetEnvironmentVariable(asName, (pszSet && *pszSet) ? pszSet : NULL);
-	SafeFree(pszExpanded);
+	const CEStr pszExpanded = ExpandEnvStr(asValue);
+	const auto pszSet = pszExpanded ? pszExpanded.c_str() : asValue;
+	SetEnvironmentVariableW(asName, (pszSet && *pszSet) ? pszSet : nullptr);
 }
 
 void CStartEnv::Title(LPCWSTR asTitle)
@@ -183,85 +186,12 @@ void CStartEnv::Title(LPCWSTR asTitle)
 	if (asTitle && *asTitle)
 	{
 		SafeFree(gpszForcedTitle);
-		gpszForcedTitle = lstrdup(asTitle);
+		gpszForcedTitle = lstrdup(asTitle).Detach();
 	}
 }
 
 void CStartEnv::Type(LPCWSTR asSwitches, LPCWSTR asFile)
 {
-	CEStr lsFull = lstrmerge(asSwitches, (asSwitches && *asSwitches) ? L" " : NULL, L"\"", asFile, L"\"");
-	DoOutput(ea_OutType, lsFull);
+	const CEStr lsFull(asSwitches, (asSwitches && *asSwitches) ? L" " : nullptr, L"\"", asFile, L"\"");
+	DoOutput(ConEmuExecAction::OutType, lsFull);
 }
-
-#ifdef _DEBUG
-void CStartEnv::UnitTests()
-{
-	CStartEnv setEnv;
-	wchar_t szTempName[80]; SYSTEMTIME st = {}; GetLocalTime(&st);
-	swprintf_c(szTempName, L"ce_temp_%u%u%u%u", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
-	SetEnvironmentVariable(szTempName, NULL);
-
-	const wchar_t szInit[] = L"initial", szPref[] = L"abc;", szSuff[] = L";def";
-	wchar_t* pchValue;
-	int iCmp;
-
-	// ce_temp="initial"
-	setEnv.Set(szTempName, szInit);
-	pchValue = GetEnvVar(szTempName);
-	iCmp = pchValue ? wcscmp(pchValue, szInit) : -1;
-	_ASSERTE(iCmp==0);
-	SafeFree(pchValue);
-
-	// ce_temp="abc;initial"
-	CEStr lsSet1(szPref, L"%", szTempName, L"%");
-	CEStr lsCmd1(szPref, szInit);
-	setEnv.Set(szTempName, lsSet1);
-	pchValue = GetEnvVar(szTempName);
-	iCmp = pchValue ? wcscmp(pchValue, lsCmd1) : -1;
-	_ASSERTE(iCmp==0);
-	SafeFree(pchValue);
-	setEnv.Set(szTempName, lsSet1);
-	pchValue = GetEnvVar(szTempName);
-	iCmp = pchValue ? wcscmp(pchValue, lsCmd1) : -1;
-	_ASSERTE(iCmp==0);
-	SafeFree(pchValue);
-
-	// ce_temp="abc;initial;def"
-	CEStr lsSet2(L"%", szTempName, L"%", szSuff);
-	CEStr lsCmd2(szPref, szInit, szSuff);
-	setEnv.Set(szTempName, lsSet2);
-	pchValue = GetEnvVar(szTempName);
-	iCmp = pchValue ? wcscmp(pchValue, lsCmd2) : -1;
-	_ASSERTE(iCmp==0);
-	SafeFree(pchValue);
-	setEnv.Set(szTempName, lsSet2);
-	pchValue = GetEnvVar(szTempName);
-	iCmp = pchValue ? wcscmp(pchValue, lsCmd2) : -1;
-	_ASSERTE(iCmp==0);
-	SafeFree(pchValue);
-
-	// ce_temp="initial"
-	setEnv.Set(szTempName, szInit);
-	pchValue = GetEnvVar(szTempName);
-	iCmp = pchValue ? wcscmp(pchValue, szInit) : -1;
-	_ASSERTE(iCmp==0);
-	SafeFree(pchValue);
-
-	// ce_temp="abc;initial;def"
-	CEStr lsSet3(szPref, L"%", szTempName, L"%", szSuff);
-	CEStr lsCmd3(szPref, szInit, szSuff);
-	setEnv.Set(szTempName, lsSet3);
-	pchValue = GetEnvVar(szTempName);
-	iCmp = pchValue ? wcscmp(pchValue, lsCmd3) : -1;
-	_ASSERTE(iCmp==0);
-	SafeFree(pchValue);
-	setEnv.Set(szTempName, lsSet3);
-	pchValue = GetEnvVar(szTempName);
-	iCmp = pchValue ? wcscmp(pchValue, lsCmd3) : -1;
-	_ASSERTE(iCmp==0);
-	SafeFree(pchValue);
-
-	// Drop temp variable
-	SetEnvironmentVariable(szTempName, NULL);
-}
-#endif

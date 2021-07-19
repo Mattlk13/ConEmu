@@ -35,7 +35,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "../common/defines.h"
 #include <commctrl.h>
-#include "header.h"
+#include "Header.h"
 #include "ConEmu.h"
 #include "IconList.h"
 #include "Options.h"
@@ -43,6 +43,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ToolImg.h"
 #include "../common/EnvVar.h"
 #include "../common/MSectionSimple.h"
+#include "../common/MWow64Disable.h"
 #include "../common/WFiles.h"
 
 #ifdef _DEBUG
@@ -59,7 +60,7 @@ CIconList::~CIconList()
 	if (mh_TabIcons)
 	{
 		ImageList_Destroy(mh_TabIcons);
-		mh_TabIcons = NULL;
+		mh_TabIcons = nullptr;
 	}
 
 	for (INT_PTR i = 0; i < m_Icons.size(); i++)
@@ -73,7 +74,7 @@ CIconList::~CIconList()
 
 bool CIconList::IsInitialized()
 {
-	return (mh_TabIcons != NULL);
+	return (mh_TabIcons != nullptr);
 }
 
 bool CIconList::Initialize()
@@ -116,7 +117,7 @@ bool CIconList::Initialize()
 		swprintf_c(szLog, L"Creating IconList for size {%ix%i} SysIcon size is {%ix%i}", mn_CxIcon, mn_CyIcon, iSysX, iSysY);
 		gpConEmu->LogString(szLog);
 
-		if ((mh_TabIcons = ImageList_Create(mn_CxIcon, mn_CyIcon, ILC_COLOR32|ILC_MASK, 0, 16)) != NULL)
+		if ((mh_TabIcons = ImageList_Create(mn_CxIcon, mn_CyIcon, ILC_COLOR32|ILC_MASK, 0, 16)) != nullptr)
 		{
 			CToolImg img;
 			int nFirstAdd = -1;
@@ -212,12 +213,20 @@ int CIconList::CreateTabIcon(LPCWSTR asIconDescr, bool bAdmin, LPCWSTR asWorkDir
 		goto wrap;
 	}
 
-	iCreatedIcon = mh_TabIcons ? CreateTabIconInt(asIconDescr, bAdmin, asWorkDir) : -1;
+	if (mh_TabIcons)
+	{
+		iCreatedIcon = CreateTabIconInt(asIconDescr, bAdmin, asWorkDir);
+		if (iCreatedIcon == -1)
+		{
+			MWow64Disable wow; wow.Disable();
+			iCreatedIcon = CreateTabIconInt(asIconDescr, bAdmin, asWorkDir);
+		}
+	}
 
 	if (iCreatedIcon == -1)
 	{
 		// To avoid numerous CreateTabIconInt calls - just remember "No icon" for that asIconDescr
-		TabIconCache DummyIcon = {lstrdup(asIconDescr), -1, bAdmin, (mh_TabIcons==NULL)};
+		TabIconCache DummyIcon = {lstrdup(asIconDescr).Detach(), -1, bAdmin, (mh_TabIcons==nullptr)};
 		m_Icons.push_back(DummyIcon);
 	}
 wrap:
@@ -226,13 +235,13 @@ wrap:
 
 int CIconList::CreateTabIconInt(LPCWSTR asIconDescr, bool bAdmin, LPCWSTR asWorkDir)
 {
-	wchar_t* pszExpanded = ExpandEnvStr(asIconDescr);
+	CEStr pszExpanded = ExpandEnvStr(asIconDescr);
 
 	// Need to be created!
 	int iIconIdx = -1;
-	HICON hFileIcon = NULL;
+	HICON hFileIcon = nullptr;
 	CEStr szLoadFile;
-	LPCWSTR lpszExt = NULL;
+	LPCWSTR lpszExt = nullptr;
 	int nIndex = 0;
 	bool bDirChanged = false;
 
@@ -251,7 +260,7 @@ int CIconList::CreateTabIconInt(LPCWSTR asIconDescr, bool bAdmin, LPCWSTR asWork
 
 	if (!lpszExt)
 	{
-		if (apiSearchPath(NULL, szLoadFile, L".exe", szLoadFile))
+		if (apiSearchPath(nullptr, szLoadFile, L".exe", szLoadFile))
 		{
 			lpszExt = PointToExt(szLoadFile);
 		}
@@ -262,27 +271,31 @@ int CIconList::CreateTabIconInt(LPCWSTR asIconDescr, bool bAdmin, LPCWSTR asWork
 
 	if (lstrcmpi(lpszExt, L".ico") == 0)
 	{
-		hFileIcon = (HICON)LoadImage(0, szLoadFile, IMAGE_ICON, mn_CxIcon, mn_CyIcon, LR_DEFAULTCOLOR|LR_LOADFROMFILE);
+		hFileIcon = static_cast<HICON>(LoadImage(nullptr, szLoadFile, IMAGE_ICON, mn_CxIcon, mn_CyIcon, LR_DEFAULTCOLOR | LR_LOADFROMFILE));
 	}
 	else if ((lstrcmpi(lpszExt, L".exe") == 0) || (lstrcmpi(lpszExt, L".dll") == 0))
 	{
-		HICON hIconLarge = NULL, hIconSmall = NULL;
+		HICON hIconLarge = nullptr, hIconSmall = nullptr;
 		const UINT extracted = ExtractIconEx(szLoadFile, nIndex, &hIconLarge, &hIconSmall, 1);
 		if (!(hIconLarge || hIconSmall))
 		{
-			_ASSERTE(!extracted || (extracted == (UINT)-1));
+			_ASSERTE(!extracted || (extracted == static_cast<UINT>(-1)));
 			CEStr rsFound;
-			if (SearchAppPaths(szLoadFile, rsFound, false/*abSetPath*/))
+			if (SearchAppPaths(szLoadFile, rsFound, false))
+			{
 				ExtractIconEx(rsFound, nIndex, &hIconLarge, &hIconSmall, 1);
+			}
 		}
-		bool bUseLargeIcon = ((mn_CxIcon > 16) && (hIconLarge != NULL)) || (hIconSmall == NULL);
+		const bool bUseLargeIcon = ((mn_CxIcon > 16) && (hIconLarge != nullptr)) || (hIconSmall == nullptr);
+		// ReSharper disable once CppLocalVariableMayBeConst
 		HICON hDestroyIcon = bUseLargeIcon ? hIconSmall : hIconLarge;
-		if (hDestroyIcon) DestroyIcon(hDestroyIcon);
+		if (hDestroyIcon)
+			DestroyIcon(hDestroyIcon);
 		hFileIcon = bUseLargeIcon ? hIconLarge : hIconSmall;
 	}
 	else
 	{
-		//TODO: Shell icons for registered files (cmd, bat, sh, pl, py, ...)
+		//#TODO: Shell icons for registered files (cmd, bat, sh, pl, py, ...)
 	}
 
 	if (hFileIcon)
@@ -292,29 +305,30 @@ int CIconList::CreateTabIconInt(LPCWSTR asIconDescr, bool bAdmin, LPCWSTR asWork
 
 		if (gpSet->isLogging())
 		{
-			CEStr lsLog(L"Icon `", asIconDescr, L"` was loaded: ", szIconInfo);
+			const CEStr lsLog(L"Icon `", asIconDescr, L"` was loaded: ", szIconInfo);
 			gpConEmu->LogString(lsLog);
 		}
 
 		int iIconIdxAdm = -1;
 		iIconIdx = ImageList_ReplaceIcon(mh_TabIcons, -1, hFileIcon);
 
-		TabIconCache NewIcon = {lstrdup(asIconDescr), iIconIdx, false};
-		m_Icons.push_back(NewIcon);
+		const TabIconCache newIcon = {lstrdup(asIconDescr).Detach(), iIconIdx, false, false};
+		m_Icons.push_back(newIcon);
 
 		if (mn_AdminOverlayIndex >= 0)
 		{
+			// ReSharper disable once CppLocalVariableMayBeConst
 			HICON hNewIcon = ImageList_GetIcon(mh_TabIcons, iIconIdx, ILD_TRANSPARENT | INDEXTOOVERLAYMASK(mn_AdminOverlayIndex));
 			if (hNewIcon)
 			{
-				CEStr lsLog(L"Admin icon `", asIconDescr, L"` was created: ", GetIconInfoStr(hNewIcon, szMergedInfo));
+				const CEStr lsLog(L"Admin icon `", asIconDescr, L"` was created: ", GetIconInfoStr(hNewIcon, szMergedInfo));
 				gpConEmu->LogString(lsLog);
 
 				iIconIdxAdm = ImageList_ReplaceIcon(mh_TabIcons, -1, hNewIcon);
 				DestroyIcon(hNewIcon);
 
-				TabIconCache AdmIcon = {lstrdup(asIconDescr), iIconIdxAdm, true};
-				m_Icons.push_back(AdmIcon);
+				const TabIconCache admIcon = {lstrdup(asIconDescr).Detach(), iIconIdxAdm, true, false};
+				m_Icons.push_back(admIcon);
 
 				if (bAdmin && (iIconIdxAdm > 0))
 				{
@@ -333,12 +347,11 @@ int CIconList::CreateTabIconInt(LPCWSTR asIconDescr, bool bAdmin, LPCWSTR asWork
 wrap:
 	if (bDirChanged)
 	{
-		gpConEmu->ChangeWorkDir(NULL);
+		gpConEmu->ChangeWorkDir(nullptr);
 	}
-	SafeFree(pszExpanded);
 	if (gpSet->isLogging() && (iIconIdx < 0))
 	{
-		CEStr lsLog(L"Icon `", asIconDescr, L"` loading was failed");
+		const CEStr lsLog(L"Icon `", asIconDescr, L"` loading was failed");
 		gpConEmu->LogString(lsLog);
 	}
 	return iIconIdx;
@@ -364,7 +377,7 @@ LPCWSTR CIconList::ParseIconFileIndex(CEStr& lsIconFileIndex, int& nIndex)
 	{
 		lsIconFileIndex.ms_Val[lpszIndex - lsIconFileIndex.ms_Val] = 0;
 
-		nIndex = wcstol(lpszIndex + 1, NULL, 10);
+		nIndex = wcstol(lpszIndex + 1, nullptr, 10);
 		if (nIndex == LONG_MAX || nIndex == LONG_MIN)
 		{
 			nIndex = 0;
@@ -380,7 +393,7 @@ LPCWSTR CIconList::ParseIconFileIndex(CEStr& lsIconFileIndex, int& nIndex)
 HICON CIconList::GetTabIconByIndex(int IconIndex)
 {
 	if (!this || !mh_TabIcons)
-		return NULL;
+		return nullptr;
 	HICON hIcon = ImageList_GetIcon(mh_TabIcons, IconIndex, ILD_TRANSPARENT);
 	return hIcon;
 }

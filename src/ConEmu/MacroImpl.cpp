@@ -35,26 +35,23 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/MStrEsc.h"
 
 // bAutoString==true : auto convert of gmt_String to gmt_VString
-wchar_t* GuiMacro::AsString()
+CEStr GuiMacro::AsString() const
 {
 	if (!szFunc || !*szFunc)
 	{
 		_ASSERTE(szFunc && *szFunc);
-		return lstrdup(L"");
+		return CEStr(L"");
 	}
-
-	// Можно использовать EscapeChar, только нужно учесть,
-	// что кавычки ВНУТРИ Arg.Str нужно эскейпить...
 
 	size_t cchTotal = _tcslen(szFunc) + 5;
 
-	wchar_t** pszArgs = NULL;
+	MArray<CEStr> pszArgs;
 
 	if (argc > 0)
 	{
+		// ReSharper disable once CppTooWideScope
 		wchar_t szNum[12];
-		pszArgs = (wchar_t**)calloc(argc, sizeof(wchar_t*));
-		if (!pszArgs)
+		if (!pszArgs.resize(argc))
 		{
 			_ASSERTE(FALSE && "Memory allocation failed");
 			return lstrdup(L"");
@@ -76,18 +73,14 @@ wchar_t* GuiMacro::AsString()
 				break;
 			case gmt_Str:
 				// + " ... ", + escaped (4x len in maximum for "\xFF" form)
-				pszArgs[i] = (wchar_t*)malloc((3+(argv[i].Str ? _tcslen(argv[i].Str)*4 : 0))*sizeof(*argv[i].Str));
-				if (pszArgs[i])
+				if (pszArgs[i].GetBuffer(3 + (argv[i].Str ? _tcslen(argv[i].Str) * 4 : 0)))
 				{
 					LPCWSTR pszSrc = argv[i].Str;
-					LPWSTR pszDst = pszArgs[i];
+					auto* pszDst = pszArgs[i].data();
 					// Start
 					*(pszDst++) = L'"';
-					// Loop
-					while (*pszSrc)
-					{
-						EscapeChar(true, pszSrc, pszDst);
-					}
+					// Value
+					EscapeString(pszSrc, pszDst);
 					// Done
 					*(pszDst++) = L'"'; *(pszDst++) = 0;
 					cchTotal += _tcslen(pszArgs[i])+1;
@@ -95,11 +88,10 @@ wchar_t* GuiMacro::AsString()
 				break;
 			case gmt_VStr:
 				// + @" ... ", + escaped (double len in maximum)
-				pszArgs[i] = (wchar_t*)malloc((4+(argv[i].Str ? _tcslen(argv[i].Str)*2 : 0))*sizeof(*argv[i].Str));
-				if (pszArgs[i])
+				if (pszArgs[i].GetBuffer(4 + (argv[i].Str ? _tcslen(argv[i].Str) * 2 : 0)))
 				{
 					LPCWSTR pszSrc = argv[i].Str;
-					LPWSTR pszDst = pszArgs[i];
+					wchar_t* pszDst = pszArgs[i].data();
 					// Start
 					*(pszDst++) = L'@'; *(pszDst++) = L'"';
 					// Loop
@@ -114,20 +106,17 @@ wchar_t* GuiMacro::AsString()
 					cchTotal += _tcslen(pszArgs[i])+1;
 				}
 				break;
+			case gmt_Fn:
 			default:
 				_ASSERTE(FALSE && "Argument type not supported");
 			}
 		}
 	}
 
-	wchar_t* pszBuf = (wchar_t*)malloc(cchTotal*sizeof(*pszBuf));
+	CEStr result;
+	wchar_t* pszBuf = result.GetBuffer(cchTotal);
 	if (!pszBuf)
 	{
-		for (size_t i = 0; i < argc; i++)
-		{
-			SafeFree(pszArgs[i]);
-		}
-		SafeFree(pszArgs);
 		_ASSERTE(FALSE && "Memory allocation failed");
 		return lstrdup(L"");
 	}
@@ -149,7 +138,6 @@ wchar_t* GuiMacro::AsString()
 		{
 			_wcscpy_c(pszDst, cchTotal, pszArgs[i]);
 			pszDst += _tcslen(pszDst);
-			free(pszArgs[i]);
 		}
 	}
 
@@ -158,16 +146,11 @@ wchar_t* GuiMacro::AsString()
 //done:
 	*(pszDst++) = 0;
 	#ifdef _DEBUG
-	size_t cchUsed = (pszDst - pszBuf);
+	const size_t cchUsed = (pszDst - pszBuf);
 	_ASSERTE(cchUsed <= cchTotal);
 	#endif
 
-
-	if (pszArgs)
-	{
-		free(pszArgs);
-	}
-	return pszBuf;
+	return result;
 }
 
 bool GuiMacro::GetIntArg(size_t idx, int& val)
@@ -183,37 +166,33 @@ bool GuiMacro::GetIntArg(size_t idx, int& val)
 	return true;
 }
 
-bool GuiMacro::GetStrArg(size_t idx, LPWSTR& val)
+bool GuiMacro::GetStrArg(size_t idx, CEStr& val)
 {
 	// It it is detected as "Int" but we need "Str" - return it as string
 	if ((idx >= argc)
 		|| (argv[idx].Type != gmt_Str && argv[idx].Type != gmt_VStr && argv[idx].Type != gmt_Int))
 	{
-		val = NULL;
+		val.Release();
 		return false;
 	}
 
 	val = argv[idx].Str;
-	return (val != NULL);
+	return (val != nullptr);
 }
 
-bool GuiMacro::GetRestStrArgs(size_t idx, LPWSTR& val)
+bool GuiMacro::GetRestStrArgs(size_t idx, CEStr& val)
 {
 	if (!GetStrArg(idx, val))
 		return false;
 	if (!IsStrArg(idx+1))
 		return true; // No more string arguments!
-	// Concatenate string (memory was allocated continuously for all arguments)
-	LPWSTR pszEnd = val + _tcslen(val);
+	// Concatenate string
 	for (size_t i = idx+1; i < argc; i++)
 	{
-		LPWSTR pszAdd;
+		CEStr pszAdd;
 		if (!GetStrArg(i, pszAdd))
 			break;
-		size_t iLen = _tcslen(pszAdd);
-		if (pszEnd < pszAdd)
-			wmemmove(pszEnd, pszAdd, iLen+1);
-		pszEnd += iLen;
+		val.Append(pszAdd);
 	}
 	// Trim argument list, there is only one returned string left...
 	argc = idx+1;
@@ -247,7 +226,7 @@ bool GuiMacro::IsStrArg(size_t idx)
 /* ************************* */
 namespace ConEmuMacro {
 
-GuiMacro* GetNextMacro(LPWSTR& asString, bool abConvert, wchar_t** rsErrMsg)
+GuiMacro* GetNextMacro(wchar_t*& asString, bool abConvert, CEStr* rsErrMsg)
 {
 	// Skip white-spaces
 	SkipWhiteSpaces(asString);
@@ -255,20 +234,20 @@ GuiMacro* GetNextMacro(LPWSTR& asString, bool abConvert, wchar_t** rsErrMsg)
 	if (!asString || !*asString)
 	{
 		if (rsErrMsg)
-			*rsErrMsg = lstrdup(L"Empty Macro");
-		return NULL;
+			rsErrMsg->Set(L"Empty Macro");
+		return nullptr;
 	}
 
 	if (*asString == L'"')
 	{
 		if (rsErrMsg)
 		{
-			*rsErrMsg = lstrmerge(
+			*rsErrMsg = CEStr(
 				L"Invalid Macro, remove surrounding quotes:\r\n",
 				asString,
-				NULL);
+				nullptr);
 		}
-		return NULL;
+		return nullptr;
 	}
 
 	// Extract function name
@@ -337,22 +316,22 @@ GuiMacro* GetNextMacro(LPWSTR& asString, bool abConvert, wchar_t** rsErrMsg)
 			_ASSERTE(chTerm || (asString && (*asString == 0)));
 			if (rsErrMsg)
 			{
-				*rsErrMsg = lstrmerge(
+				*rsErrMsg = CEStr(
 					L"Invalid Macro, can't get function name:\r\n",
 					asString,
-					NULL);
+					nullptr);
 			}
-			return NULL;
+			return nullptr;
 		}
 
 		if (rsErrMsg)
 		{
-			*rsErrMsg = lstrmerge(
+			*rsErrMsg = CEStr(
 				L"Invalid Macro, too long function name:\r\n",
 				asString,
-				NULL);
+				nullptr);
 		}
-		return NULL;
+		return nullptr;
 	}
 
 	// Подготовить аргументы (отрезать закрывающую скобку)
@@ -396,7 +375,7 @@ GuiMacro* GetNextMacro(LPWSTR& asString, bool abConvert, wchar_t** rsErrMsg)
 			a.Type = (asString[0] == L'0' && (asString[1] == L'x' || asString[1] == L'X')) ? gmt_Hex : gmt_Int;
 
 			// If it fails - just use as string
-			bIntArg = (GetNextInt(asString, a) != NULL);
+			bIntArg = (GetNextInt(asString, a) != nullptr);
 		}
 
 		if (!bIntArg)
@@ -424,7 +403,7 @@ GuiMacro* GetNextMacro(LPWSTR& asString, bool abConvert, wchar_t** rsErrMsg)
 				swprintf_c(szArgErr, L"Argument #%u failed (string)", Args.size()+1);
 				if (rsErrMsg)
 					*rsErrMsg = lstrdup(szArgErr);
-				return NULL;
+				return nullptr;
 			}
 
 			if (lbCvtVbt)
@@ -454,8 +433,8 @@ GuiMacro* GetNextMacro(LPWSTR& asString, bool abConvert, wchar_t** rsErrMsg)
 	GuiMacro* pMacro = (GuiMacro*)malloc(cbAllSize);
 	if (!pMacro)
 	{
-		_ASSERTE(pMacro != NULL);
-		return NULL;
+		_ASSERTE(pMacro != nullptr);
+		return nullptr;
 	}
 
 	pMacro->cbSize = cbAllSize;
@@ -511,21 +490,21 @@ GuiMacro* GetNextMacro(LPWSTR& asString, bool abConvert, wchar_t** rsErrMsg)
 // Helper to concatenate macros.
 // They must be ‘concatenatable’, example: Print("abc"); Print("Qqq")
 // But following WILL NOT work: Print: Abd qqq
-LPCWSTR ConcatMacro(LPWSTR& rsMacroList, LPCWSTR asAddMacro)
+LPCWSTR ConcatMacro(CEStr& rsMacroList, LPCWSTR asAddMacro)
 {
 	if (!asAddMacro || !*asAddMacro)
 	{
 		return rsMacroList;
 	}
 
-	if (!rsMacroList || !*rsMacroList)
+	if (rsMacroList.IsEmpty())
 	{
-		SafeFree(rsMacroList);
+		rsMacroList.Release();
 		rsMacroList = lstrdup(asAddMacro);
 	}
 	else
 	{
-		lstrmerge(&rsMacroList, L"; ", asAddMacro);
+		rsMacroList.Append(L"; ", asAddMacro);
 	}
 
 	return rsMacroList;
@@ -536,29 +515,29 @@ void SkipWhiteSpaces(LPWSTR& rsString)
 {
 	if (!rsString)
 	{
-		_ASSERTE(rsString!=NULL);
+		_ASSERTE(rsString!=nullptr);
 		return;
 	}
 
 	// Skip white-spaces
-	while (*rsString == L' ' || *rsString == L'\t' || *rsString == L'\r' || *rsString == L'\n')
-		rsString++;
+	rsString = const_cast<LPWSTR>(SkipNonPrintable(rsString));
 }
 
 /* ***  Функции для парсера параметров  *** */
 
 // Get next numerical argument (dec or hex)
 // Delimiter - comma or space
-LPWSTR GetNextInt(LPWSTR& rsArguments, GuiMacroArg& rnValue)
+wchar_t* GetNextInt(wchar_t*& rsArguments, GuiMacroArg& rnValue)
 {
-	LPWSTR pszArg = NULL, pszEnd = NULL;
+	wchar_t* pszArg = nullptr;
+	wchar_t* pszEnd = nullptr;
 	rnValue.Str = rsArguments;
 	rnValue.Int = 0; // Reset
 
 	SkipWhiteSpaces(rsArguments);
 
 	if (!rsArguments || !*rsArguments)
-		return NULL;
+		return nullptr;
 
 	// Результат
 	pszArg = rsArguments;
@@ -587,15 +566,17 @@ LPWSTR GetNextInt(LPWSTR& rsArguments, GuiMacroArg& rnValue)
 	else
 		rnValue.Int = wcstol(pszArg, &pszEnd, 10);
 
+	#ifdef _DEBUG // due to unittests
 	_ASSERTE(pszEnd == pszTestEnd);
+	#endif
 
 	if (pszEnd && *pszEnd)
 	{
 		// Check, if next symbol is correct delimiter
-		if (wcschr(L" \t\r\n),;", *pszEnd) == NULL)
+		if (wcschr(L" \t\r\n),;", *pszEnd) == nullptr)
 		{
 			// We'll use it as string
-			return NULL;
+			return nullptr;
 		}
 		rsArguments = pszEnd;
 		SkipWhiteSpaces(rsArguments);
@@ -610,22 +591,22 @@ LPWSTR GetNextInt(LPWSTR& rsArguments, GuiMacroArg& rnValue)
 }
 
 // Получить следующий строковый параметр
-LPWSTR GetNextString(LPWSTR& rsArguments, LPWSTR& rsString, bool bColonDelim, bool& bEndBracket)
+wchar_t* GetNextString(wchar_t*& rsArguments, wchar_t*& rsString, bool bColonDelim, bool& bEndBracket)
 {
-	rsString = NULL; // Сброс
+	rsString = nullptr; // Сброс
 
 	if (!rsArguments || !*rsArguments)
-		return NULL;
+		return nullptr;
 
 	#ifdef _DEBUG
 	LPWSTR pszArgStart = rsArguments;
-	LPWSTR pszArgEnd = rsArguments+_tcslen(rsArguments);
+	LPWSTR pszArgEnd = rsArguments + _tcslen(rsArguments);
 	#endif
 
 	// Пропустить white-space
 	SkipWhiteSpaces(rsArguments);
 
-	LPCWSTR pszSrc = NULL;
+	LPCWSTR pszSrc = nullptr;
 
 	// C-style strings
 	if (rsArguments[0] == L'"')
@@ -635,7 +616,7 @@ LPWSTR GetNextString(LPWSTR& rsArguments, LPWSTR& rsString, bool bColonDelim, bo
 		LPWSTR pszDst = rsString;
 		while (*pszSrc && (*pszSrc != L'"'))
 		{
-			EscapeChar(false, pszSrc, pszDst);
+			UnescapeChar(pszSrc, pszDst);
 		}
 		_ASSERTE((*pszSrc == L'"') || (*pszSrc == 0));
 		rsArguments = (wchar_t*)((*pszSrc == L'"') ? (pszSrc+1) : pszSrc);
@@ -662,21 +643,23 @@ LPWSTR GetNextString(LPWSTR& rsArguments, LPWSTR& rsString, bool bColonDelim, bo
 				{
 					DEBUGTEST(LPCWSTR pszStart = pszSrc);
 					pszTemp = szTemp;
-					EscapeChar(false, pszSrc, pszTemp);
-					EscapeChar(false, pszSrc, pszTemp);
+					UnescapeChar(pszSrc, pszTemp);
+					UnescapeChar(pszSrc, pszTemp);
+					#ifdef _DEBUG // due to unittests
 					_ASSERTE((pszTemp==(szTemp+2)) && (pszSrc==(pszStart+3) || pszSrc==(pszStart+4)));
+					#endif
 					pszTemp = szTemp;
 					LPCWSTR pszReent = szTemp;
-					EscapeChar(false, pszReent, pszDst);
+					UnescapeChar(pszReent, pszDst);
 				}
 				else
 				{
-					EscapeChar(false, pszSrc, pszTemp);
+					UnescapeChar(pszSrc, pszTemp);
 				}
 			}
 			else
 			{
-				EscapeChar(false, pszSrc, pszDst);
+				UnescapeChar(pszSrc, pszDst);
 			}
 		}
 		_ASSERTE((*pszSrc == L'"') || (*pszSrc == 0));
@@ -757,18 +740,24 @@ LPWSTR GetNextString(LPWSTR& rsArguments, LPWSTR& rsString, bool bColonDelim, bo
 
 	if (*rsArguments)
 	{
+		#ifdef _DEBUG // due to unittests
 		_ASSERTE(rsArguments>=pszArgStart && rsArguments<pszArgEnd);
+		#endif
 
 		SkipWhiteSpaces(rsArguments);
 		if (*rsArguments == L',')
 			rsArguments++;
 
+		#ifdef _DEBUG // due to unittests
 		_ASSERTE(rsArguments>=pszArgStart && rsArguments<=pszArgEnd);
+		#endif
 	}
 
 wrap:
-	// Тут уже NULL-а не будет, допускаются пустые строки ("")
-	_ASSERTE(rsString!=NULL);
+	// Here nullptr is not expected, but empty string ("") is allowed
+	#ifdef _DEBUG // due to unittests
+	_ASSERTE(rsString!=nullptr);
+	#endif
 	return rsString;
 }
 

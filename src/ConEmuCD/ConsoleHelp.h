@@ -32,7 +32,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _DBGHLP(x)
 #endif
 
-// Used via SetWindowText && _wprintf. Need not escape of "%".
+// Used via SetWindowText && PrintBuffer. Need not escape of "%".
 #define pConsoleHelp \
 		L"This is a console part of ConEmu product.\r\n" \
 		L"Usage: ConEmuC [switches] -ROOT <program with arguments, far.exe for example>\r\n" \
@@ -40,7 +40,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 		L"   or: ConEmuC -AUTOATTACH [-GHWND=NEW|<HWND>]\r\n" \
 		L"   or: ConEmuC -ATTACH -NOCMD\r\n" \
 		L"   or: ConEmuC -ATTACH [-GHWND=NEW|<HWND>] -[FAR|CON|TRM]PID=<PID>\r\n" \
-		L"   or: ConEmuC [-SILENT] [-USEEXPORT] -GUIMACRO[:PID|HWND][:T<tab>][:S<split>] <GuiMacro command>\r\n" \
+		L"   or: ConEmuC [-SILENT] [-USEEXPORT] -GUIMACRO[:PID|0xHWND][:T<tab>][:S<split>] <GuiMacro command>\r\n" \
 		L"   or: ConEmuC -IsConEmu | -IsAnsi | -IsAdmin | -IsRedirect | -IsTerm\r\n" \
 		L"   or: ConEmuC -DEBUGPID=<PID>[,<PID2>[,...]] [-DUMP | -MINI | -AUTOMINI | -FULL]\r\n" \
 		L"   or: ConEmuC -DEBUGEXE | -DEBUGTREE <CommandLine>\r\n" \

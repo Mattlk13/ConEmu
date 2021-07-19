@@ -27,30 +27,26 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 
-#include "../common/defines.h"
-#include <WinError.h>
-#include <WinNT.h>
-#include <TCHAR.h>
+#include "ConsoleMain.h"
+#include <winerror.h>
+#include <winnt.h>
+#include <tchar.h>
 #include <limits>
 #include "../common/Common.h"
 #include "../common/ConEmuCheck.h"
 #include "../common/CmdLine.h"
-#include "../common/ConsoleAnnotation.h"
-#include "../common/UnicodeChars.h"
 #include "../common/WConsole.h"
-#include "../common/WErrGuard.h"
 #include "../ConEmu/version.h"
 
 #include "ConAnsiImpl.h"
 #include "ConEmuSrv.h"
+#include "ConsoleState.h"
 
 #ifdef _DEBUG
 	#define DUMP_CONSOLE_OUTPUT
 #endif
 
 
-
-#define ANSI_MAP_CHECK_TIMEOUT 1000
 
 #ifdef _DEBUG
 #define DebugString(x) OutputDebugString(x)
@@ -75,7 +71,7 @@ SrvAnsiImpl::SrvAnsiImpl(SrvAnsi* _owner, condata::Table* _table)
 	, m_Owner(_owner)
 	, m_Table(_table)
 {
-	m_Owner->GetFeatures(NULL, &m_Owner->mb_SuppressBells);
+	m_Owner->GetFeatures(nullptr, &m_Owner->mb_SuppressBells);
 }
 
 SrvAnsiImpl::~SrvAnsiImpl()
@@ -106,17 +102,17 @@ bool SrvAnsiImpl::OurWriteConsole(const wchar_t* lpBuffer, DWORD nNumberOfCharsT
 		if (m_Owner->gCpConv.nFromCP && m_Owner->gCpConv.nToCP)
 		{
 			// Convert from Unicode to MBCS
-			int iMBCSLen = WideCharToMultiByte(m_Owner->gCpConv.nFromCP, 0, (LPCWSTR)lpBuffer, nNumberOfCharsToWrite, NULL, 0, NULL, NULL);
+			int iMBCSLen = WideCharToMultiByte(m_Owner->gCpConv.nFromCP, 0, (LPCWSTR)lpBuffer, nNumberOfCharsToWrite, nullptr, 0, nullptr, nullptr);
 			if (iMBCSLen > 0)
 			{
 				CEStrA szTemp;
-				if (char* pszTemp = szTemp.getbuffer(iMBCSLen))
+				if (char* pszTemp = szTemp.GetBuffer(iMBCSLen))
 				{
 					BOOL bFailed = FALSE; // Do not do conversion if some chars can't be mapped
-					iMBCSLen = WideCharToMultiByte(m_Owner->gCpConv.nFromCP, 0, (LPCWSTR)lpBuffer, nNumberOfCharsToWrite, pszTemp, iMBCSLen, NULL, &bFailed);
+					iMBCSLen = WideCharToMultiByte(m_Owner->gCpConv.nFromCP, 0, (LPCWSTR)lpBuffer, nNumberOfCharsToWrite, pszTemp, iMBCSLen, nullptr, &bFailed);
 					if ((iMBCSLen > 0) && !bFailed)
 					{
-						int iWideLen = MultiByteToWideChar(m_Owner->gCpConv.nToCP, 0, pszTemp, iMBCSLen, NULL, 0);
+						int iWideLen = MultiByteToWideChar(m_Owner->gCpConv.nToCP, 0, pszTemp, iMBCSLen, nullptr, 0);
 						if (iWideLen > 0)
 						{
 							if (wchar_t* ptrBuf = CpCvt.GetBuffer(iWideLen))
@@ -150,12 +146,12 @@ bool SrvAnsiImpl::OurWriteConsole(const wchar_t* lpBuffer, DWORD nNumberOfCharsT
 		{
 			ExecutePrepareCmd(pIn, CECMD_FLASHWINDOW, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_FLASHWINFO)); //-V119
 			pIn->Flash.fType = eFlashBeep;
-			pIn->Flash.hWnd = ghConWnd;
+			pIn->Flash.hWnd = gState.realConWnd_;
 			pIn->Flash.bInvert = FALSE;
 			pIn->Flash.dwFlags = FLASHW_ALL;
 			pIn->Flash.uCount = 1;
 			pIn->Flash.dwTimeout = 0;
-			auto pOut = ExecuteGuiCmd(ghConWnd, pIn, ghConWnd);
+			auto pOut = ExecuteGuiCmd(gState.realConWnd_, pIn, gState.realConWnd_);
 			if (pOut) ExecuteFreeResult(pOut);
 			ExecuteFreeResult(pIn);
 		}
@@ -172,7 +168,7 @@ bool SrvAnsiImpl::WriteText(LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, LPDWO
 		m_Owner->m_LastWrittenChar = lpBuffer[nNumberOfCharsToWrite-1];
 
 	LPCWSTR pszSrcBuffer = lpBuffer;
-	wchar_t cvtBuf[400], *pcvtBuf = NULL; CEStr szTemp;
+	wchar_t cvtBuf[400], *pcvtBuf = nullptr; CEStr szTemp;
 	if (m_Owner->mCharSet && lpBuffer && nNumberOfCharsToWrite)
 	{
 		static wchar_t G0_DRAWING[31] = {
@@ -181,7 +177,8 @@ bool SrvAnsiImpl::WriteText(LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, LPDWO
 			0x207B /*⁻*/, 0x2500 /*─*/, 0x208B /*₋*/, 0x005F /*_*/, 0x251C /*├*/, 0x2524 /*┤*/, 0x2534 /*┴*/, 0x252C /*┬*/,
 			0x2502 /*│*/, 0x2264 /*≤*/, 0x2265 /*≥*/, 0x03C0 /*π*/, 0x2260 /*≠*/, 0x00A3 /*£*/, 0x00B7 /*·*/
 		};
-		LPCWSTR pszMap = NULL;
+		LPCWSTR pszMap = nullptr;
+		// ReSharper disable once CppIncompleteSwitchStatement
 		switch (m_Owner->mCharSet)
 		{
 		case SrvAnsi::VTCS_DRAWING:
@@ -190,7 +187,7 @@ bool SrvAnsiImpl::WriteText(LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, LPDWO
 		}
 		if (pszMap)
 		{
-			wchar_t* dst = NULL;
+			wchar_t* dst = nullptr;
 			for (DWORD i = 0; i < nNumberOfCharsToWrite; ++i)
 			{
 				if (pszSrcBuffer[i] >= 0x60 && pszSrcBuffer[i] < 0x7F)
@@ -203,7 +200,7 @@ bool SrvAnsiImpl::WriteText(LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, LPDWO
 						}
 						else
 						{
-							if (!(pcvtBuf = szTemp.GetBuffer(nNumberOfCharsToWrite)))
+							if (!((pcvtBuf = szTemp.GetBuffer(nNumberOfCharsToWrite))))
 								break;
 						}
 						lpBuffer = pcvtBuf;
@@ -460,9 +457,9 @@ int SrvAnsiImpl::NextEscCode(LPCWSTR lpBuffer, LPCWSTR lpEnd, wchar_t (&szPreDum
 										Code.ArgV[Code.ArgC++] = nValue;
 									return true;
 								}
-								else if (!nDigits && !Code.ArgC)
+								else
 								{
-									if ((Code.PvtLen+1) < (int)countof(Code.Pvt))
+									if ((size_t(Code.PvtLen) + 2) < countof(Code.Pvt))
 									{
 										Code.Pvt[Code.PvtLen++] = wc; // Skip private symbols
 										Code.Pvt[Code.PvtLen] = 0;
@@ -492,7 +489,7 @@ int SrvAnsiImpl::NextEscCode(LPCWSTR lpBuffer, LPCWSTR lpEnd, wchar_t (&szPreDum
 						lpStart = lpSaveStart;
 						Code.Action = *(lpBuffer++);
 						Code.Skip = 0;
-						Code.ArgSZ = NULL;
+						Code.ArgSZ = nullptr;
 						Code.cchArgSZ = 0;
 						lpEnd = lpBuffer;
 						iRc = 1;
@@ -502,7 +499,7 @@ int SrvAnsiImpl::NextEscCode(LPCWSTR lpBuffer, LPCWSTR lpEnd, wchar_t (&szPreDum
 					case L'[':
 						// Standard
 						Code.Skip = 0;
-						Code.ArgSZ = NULL;
+						Code.ArgSZ = nullptr;
 						Code.cchArgSZ = 0;
 						{
 							#ifdef _DEBUG
@@ -730,7 +727,7 @@ void SrvAnsiImpl::EscCopyCtrlString(wchar_t* pszDst, LPCWSTR asMsg, ssize_t cchM
 {
 	if (!pszDst)
 	{
-		_ASSERTEX(pszDst!=NULL);
+		_ASSERTEX(pszDst!=nullptr);
 		return;
 	}
 
@@ -766,11 +763,11 @@ void SrvAnsiImpl::DoMessage(LPCWSTR asMsg, ssize_t cchLen)
 		//pszText[cchLen] = 0;
 
 		wchar_t szExe[MAX_PATH] = {};
-		GetModuleFileName(NULL, szExe, countof(szExe));
+		GetModuleFileName(nullptr, szExe, countof(szExe));
 		wchar_t szTitle[MAX_PATH+64];
 		msprintf(szTitle, countof(szTitle), L"PID=%u, %s", GetCurrentProcessId(), PointToName(szExe));
 
-		GuiMessageBox(ghConEmuWnd, pszText, szTitle, MB_ICONINFORMATION|MB_SYSTEMMODAL);
+		GuiMessageBox(gState.conemuWnd_, pszText, szTitle, MB_ICONINFORMATION|MB_SYSTEMMODAL);
 
 		free(pszText);
 	}
@@ -787,11 +784,11 @@ bool SrvAnsiImpl::IsAnsiExecAllowed(LPCWSTR asCmd)
 	if (!pMap)
 		return false;
 
-	if ((pMap->Flags & CECF_AnsiExecAny) != 0)
+	if ((pMap->Flags & ConEmu::ConsoleFlags::AnsiExecAny) != 0)
 	{
 		// Allowed in any process
 	}
-	else if ((pMap->Flags & CECF_AnsiExecCmd) != 0)
+	else if ((pMap->Flags & ConEmu::ConsoleFlags::AnsiExecCmd) != 0)
 	{
 		// #condata Allowed in Cmd.exe only
 		// if (!gbIsCmdProcess)
@@ -806,7 +803,7 @@ bool SrvAnsiImpl::IsAnsiExecAllowed(LPCWSTR asCmd)
 	// Now we need to ask GUI, if the command (asCmd) is allowed
 	bool bAllowed = false;
 	ssize_t cchLen = wcslen(asCmd) + 1;
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 	CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_ALLOWANSIEXEC, sizeof(CESERVER_REQ_HDR)+sizeof(wchar_t)*cchLen);
 
 	if (pIn)
@@ -814,7 +811,7 @@ bool SrvAnsiImpl::IsAnsiExecAllowed(LPCWSTR asCmd)
 		_ASSERTE(sizeof(pIn->wData[0])==sizeof(*asCmd));
 		memmove(pIn->wData, asCmd, cchLen*sizeof(pIn->wData[0]));
 
-		pOut = ExecuteGuiCmd(ghConWnd, pIn, ghConWnd);
+		pOut = ExecuteGuiCmd(gState.realConWnd_, pIn, gState.realConWnd_);
 		if (pOut && (pOut->DataSize() == sizeof(pOut->dwData[0])))
 		{
 			bAllowed = (pOut->dwData[0] == TRUE);
@@ -830,7 +827,7 @@ bool SrvAnsiImpl::IsAnsiExecAllowed(LPCWSTR asCmd)
 // ESC ] 9 ; 6 ; "macro" ST        Execute some GuiMacro
 void SrvAnsiImpl::DoGuiMacro(LPCWSTR asCmd, ssize_t cchLen)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 	CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_GUIMACRO, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_GUIMACRO)+sizeof(wchar_t)*(cchLen + 1));
 
 	if (pIn)
@@ -839,12 +836,12 @@ void SrvAnsiImpl::DoGuiMacro(LPCWSTR asCmd, ssize_t cchLen)
 
 		if (IsAnsiExecAllowed(pIn->GuiMacro.sMacro))
 		{
-			pOut = ExecuteGuiCmd(ghConWnd, pIn, ghConWnd);
+			pOut = ExecuteGuiCmd(gState.realConWnd_, pIn, gState.realConWnd_);
 		}
 	}
 
 	// EnvVar "ConEmuMacroResult"
-	SetEnvironmentVariable(CEGUIMACRORETENVVAR, pOut && pOut->GuiMacro.nSucceeded ? pOut->GuiMacro.sMacro : NULL);
+	SetEnvironmentVariable(CEGUIMACRORETENVVAR, pOut && pOut->GuiMacro.nSucceeded ? pOut->GuiMacro.sMacro : nullptr);
 
 	ExecuteFreeResult(pOut);
 	ExecuteFreeResult(pIn);
@@ -862,10 +859,11 @@ void SrvAnsiImpl::DoProcess(LPCWSTR asCmd, ssize_t cchLen)
 
 		if (IsAnsiExecAllowed(pszCmdLine))
 		{
-			STARTUPINFO si = {sizeof(si)};
+			STARTUPINFO si = {};
+			si.cb = sizeof(si);
 			PROCESS_INFORMATION pi = {};
 
-			bool bCreated = CreateProcessW(NULL, pszCmdLine, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+			const bool bCreated = CreateProcessW(nullptr, pszCmdLine, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi);
 			if (bCreated)
 			{
 				WaitForSingleObject(pi.hProcess, INFINITE);
@@ -944,7 +942,7 @@ void SrvAnsiImpl::DoSendCWD(LPCWSTR asCmd, ssize_t cchLen)
 		EscCopyCtrlString(pszCWD, asCmd, cchLen);
 
 		// Sends CECMD_STORECURDIR into RConServer
-		SendCurrentDirectory(ghConWnd, pszCWD);
+		SendCurrentDirectory(gState.realConWnd_, pszCWD);
 
 		free(pszCWD);
 	}
@@ -953,20 +951,20 @@ void SrvAnsiImpl::DoSendCWD(LPCWSTR asCmd, ssize_t cchLen)
 // When _st_ is 0: remove progress.
 // When _st_ is 1: set progress value to _pr_ (number, 0-100).
 // When _st_ is 2: set error state in progress on Windows 7 taskbar
-void SrvAnsiImpl::DoSetProgress(WORD st, WORD pr, LPCWSTR pszName /*= NULL*/)
+void SrvAnsiImpl::DoSetProgress(const AnsiProgressStatus st, const WORD pr, LPCWSTR pszName /*= nullptr*/)
 {
 	int nLen = pszName ? (lstrlen(pszName) + 1) : 1;
-	CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_SETPROGRESS, sizeof(CESERVER_REQ_HDR)+sizeof(WORD)*(2+nLen));
+	CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_SETPROGRESS, sizeof(CESERVER_REQ_HDR) + sizeof(WORD) * (2 + nLen));
 	if (pIn)
 	{
-		pIn->wData[0] = st;
-		pIn->wData[1] = pr;
+		pIn->wData[0] = static_cast<WORD>(st);
+		pIn->wData[1] = pr;  // NOLINT(clang-diagnostic-array-bounds)
 		if (pszName)
 		{
 			lstrcpy((wchar_t*)(pIn->wData+2), pszName);
 		}
 
-		CESERVER_REQ* pOut = ExecuteGuiCmd(ghConWnd, pIn, ghConWnd);
+		CESERVER_REQ* pOut = ExecuteGuiCmd(gState.realConWnd_, pIn, gState.realConWnd_);
 		ExecuteFreeResult(pIn);
 		ExecuteFreeResult(pOut);
 	}
@@ -1026,13 +1024,13 @@ void SrvAnsiImpl::ReportTerminalPixelSize()
 	int width = 0, height = 0;
 	RECT rcWnd = {};
 
-	if (ghConEmuWndDC && GetClientRect(ghConEmuWndDC, &rcWnd))
+	if (gState.conemuWndDC_ && GetClientRect(gState.conemuWndDC_, &rcWnd))
 	{
 		width = RectWidth(rcWnd);
 		height = RectHeight(rcWnd);
 	}
 
-	if ((width <= 0 || height <= 0) && ghConWnd && GetClientRect(ghConWnd, &rcWnd))
+	if ((width <= 0 || height <= 0) && gState.realConWnd_ && GetClientRect(gState.realConWnd_, &rcWnd))
 	{
 		width = RectWidth(rcWnd);
 		height = RectHeight(rcWnd);
@@ -1096,7 +1094,7 @@ bool SrvAnsiImpl::WriteAnsiCodes(LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, 
 
 	while (lpBuffer < lpEnd)
 	{
-		LPCWSTR lpStart = NULL, lpNext = NULL; // Required to be NULL-initialized
+		LPCWSTR lpStart = nullptr, lpNext = nullptr; // Required to be nullptr-initialized
 
 		// '^' is ESC
 		// ^[0;31;47m   $E[31;47m   ^[0m ^[0;1;31;47m  $E[1;31;47m  ^[0m
@@ -1186,7 +1184,7 @@ bool SrvAnsiImpl::WriteAnsiCodes(LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, 
 						// User may disable flashing in ConEmu settings
 						// #ANSI Implement GuiFlashWindow in common
 						DumpKnownEscape(Code.pszEscStart, Code.nTotalLen, de_Ignored);
-						// GuiFlashWindow(eFlashBeep, ghConWnd, FALSE, FLASHW_ALL, 1, 0);
+						// GuiFlashWindow(eFlashBeep, gState.realConWnd, FALSE, FLASHW_ALL, 1, 0);
 						break;
 					case L'H':
 						// #ANSI gh-1827: support 'H' to set tab stops
@@ -1264,7 +1262,7 @@ bool SrvAnsiImpl::WriteAnsiCodes(LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, 
 		}
 		else
 		{
-			_ASSERTEX(lpNext > lpBuffer || lpNext == NULL);
+			_ASSERTEX(lpNext > lpBuffer || lpNext == nullptr);
 			++lpBuffer;
 		}
 	}
@@ -2200,13 +2198,15 @@ void SrvAnsiImpl::WriteAnsiCode_OSC(AnsiEscCode& Code)
 		// ESC ] 9 ; 1 ; ms ST           Sleep. ms - milliseconds
 		// ESC ] 9 ; 2 ; "txt" ST        Show GUI MessageBox ( txt ) for dubug purposes
 		// ESC ] 9 ; 3 ; "txt" ST        Set TAB text
-		// ESC ] 9 ; 4 ; st ; pr ST      When _st_ is 0: remove progress. When _st_ is 1: set progress value to _pr_ (number, 0-100). When _st_ is 2: set error state in progress on Windows 7 taskbar
+		// ESC ] 9 ; 4 ; st ; pr ST      When _st_ is 0: remove progress. When _st_ is 1: set progress value to _pr_ (number, 0-100).
+		//                               When _st_ is 2: set error state in progress on Windows 7 taskbar, _pr_ is optional.
+		//                               When _st_ is 3: set indeterminate state. When _st_ is 4: set paused state, _pr_ is optional.
 		// ESC ] 9 ; 5 ST                Wait for ENTER/SPACE/ESC. Set EnvVar "ConEmuWaitKey" to ENTER/SPACE/ESC on exit.
 		// ESC ] 9 ; 6 ; "txt" ST        Execute GuiMacro. Set EnvVar "ConEmuMacroResult" on exit.
 		// ESC ] 9 ; 7 ; "cmd" ST        Run some process with arguments
 		// ESC ] 9 ; 8 ; "env" ST        Output value of environment variable
 		// ESC ] 9 ; 9 ; "cwd" ST        Inform ConEmu about shell current working directory
-		// ESC ] 9 ; 10 ST               Request xterm keyboard emulation
+		// ESC ] 9 ; 10 ; p ST           Request xterm keyboard emulation
 		// ESC ] 9 ; 11; "*txt*" ST      Just a ‘comment’, skip it.
 		// ESC ] 9 ; 12 ST               Let ConEmu treat current cursor position as prompt start. Useful with `PS1`.
 		if (Code.ArgSZ[1] == L';')
@@ -2221,10 +2221,18 @@ void SrvAnsiImpl::WriteAnsiCode_OSC(AnsiEscCode& Code)
 				else if (Code.ArgC >= 2 && Code.ArgV[1] == 10)
 				{
 					// ESC ] 9 ; 10 ST
-					if (!m_Owner->gbWasXTermOutput && (Code.ArgC == 2 || Code.ArgV[2] != 0))
+					// ESC ] 9 ; 10 ; 1 ST
+					if (!m_Owner->gbIsXTermOutput && (Code.ArgC == 2 || Code.ArgV[2] == 1))
 						m_Owner->StartXTermMode(true);
+					// ESC ] 9 ; 10 ; 0 ST
 					else if (Code.ArgC >= 3 || Code.ArgV[2] == 0)
 						m_Owner->StartXTermMode(false);
+					// ESC ] 9 ; 10 ; 3 ST
+					else if (Code.ArgC >= 3 || Code.ArgV[2] == 3)
+						m_Owner->StartXTermOutput(true);
+					// ESC ] 9 ; 10 ; 2 ST
+					else if (Code.ArgC >= 3 || Code.ArgV[2] == 2)
+						m_Owner->StartXTermOutput(false);
 				}
 				else if (Code.ArgSZ[3] == L'1' && Code.ArgSZ[4] == L';')
 				{
@@ -2247,38 +2255,46 @@ void SrvAnsiImpl::WriteAnsiCode_OSC(AnsiEscCode& Code)
 				if (pIn)
 				{
 					EscCopyCtrlString((wchar_t*)pIn->wData, Code.ArgSZ+4, Code.cchArgSZ-4);
-					CESERVER_REQ* pOut = ExecuteGuiCmd(ghConWnd, pIn, ghConWnd);
+					CESERVER_REQ* pOut = ExecuteGuiCmd(gState.realConWnd_, pIn, gState.realConWnd_);
 					ExecuteFreeResult(pIn);
 					ExecuteFreeResult(pOut);
 				}
 			}
 			else if (Code.ArgSZ[2] == L'4')
 			{
-				WORD st = 0, pr = 0;
-				LPCWSTR pszName = NULL;
+				AnsiProgressStatus st = AnsiProgressStatus::None;
+				WORD pr = 0;
+				const wchar_t* pszName = nullptr;
 				if (Code.ArgSZ[3] == L';')
 				{
 					switch (Code.ArgSZ[4])
 					{
 					case L'0':
 						break;
-					case L'1': // Normal
-					case L'2': // Error
-						st = Code.ArgSZ[4] - L'0';
+					case L'1':
+						st = AnsiProgressStatus::Running; break;
+					case L'2':
+						st = AnsiProgressStatus::Error; break;
+					case L'3':
+						st = AnsiProgressStatus::Indeterminate; break;
+					case L'4':
+						st = AnsiProgressStatus::Paused; break;
+					case L'5': // reserved for future use
+						st = AnsiProgressStatus::LongRunStart; break;
+					case L'6': // reserved for future use
+						st = AnsiProgressStatus::LongRunStop; break;
+					}
+					if (st == AnsiProgressStatus::Running || st == AnsiProgressStatus::Error || st == AnsiProgressStatus::Paused)
+					{
 						if (Code.ArgSZ[5] == L';')
 						{
 							LPCWSTR pszValue = Code.ArgSZ + 6;
 							pr = NextNumber(pszValue);
 						}
-						break;
-					case L'3':
-						st = 3; // Indeterminate
-						break;
-					case L'4':
-					case L'5':
-						st = Code.ArgSZ[4] - L'0';
-						pszName = (Code.ArgSZ[5] == L';') ? (Code.ArgSZ + 6) : NULL;
-						break;
+					}
+					if (st == AnsiProgressStatus::LongRunStart || st == AnsiProgressStatus::LongRunStop)
+					{
+						pszName = (Code.ArgSZ[5] == L';') ? (Code.ArgSZ + 6) : nullptr;
 					}
 				}
 				DoSetProgress(st, pr, pszName);
@@ -2348,7 +2364,7 @@ void SrvAnsiImpl::WriteAnsiCode_OSC(AnsiEscCode& Code)
 void SrvAnsiImpl::WriteAnsiCode_VIM(AnsiEscCode& Code)
 {
 	/*
-	if (!m_Owner->gbWasXTermOutput && !gnWriteProcessed)
+	if (!m_Owner->gbIsXTermOutput && !gnWriteProcessed)
 	{
 		SrvAnsiImpl::StartXTermMode(true);
 	}

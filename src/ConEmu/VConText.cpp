@@ -53,25 +53,25 @@ const wchar_t gszAnalogues[32] =
 
 // bool isCharAltFont(ucs32 inChar) - app defined
 
-bool isCharPseudographics(ucs32 inChar)
+bool isCharPseudographics(const ucs32 inChar)
 {
-	bool isPseudo = ((inChar >= 0x2013) && (inChar <= 0x25C4));
+	const bool isPseudo = ((inChar >= 0x2013) && (inChar <= 0x25C4));
 	return isPseudo;
 }
 
 // Some pseudographics characters may be shrinked freely
-bool isCharPseudoFree(ucs32 inChar)
+bool isCharPseudoFree(const ucs32 inChar)
 {
-	bool isFree = (inChar == ucBoxSinglHorz) || (inChar == ucBoxDblHorz);
+	const bool isFree = (inChar == ucBoxSinglHorz) || (inChar == ucBoxDblHorz);
 	return isFree;
 }
 
 // These are "frame" characters, which has either
 // * any vertical (even partial) line
 // * or Up/Down arrows (scrollers)
-bool isCharBorderVertical(ucs32 inChar)
+bool isCharBorderVertical(const ucs32 inChar)
 {
-	bool isVert = ((inChar >= ucBoxSinglVert)
+	const bool isVert = ((inChar >= ucBoxSinglVert)
 		&& ((inChar <= ucBoxSinglUpHorz)
 			|| ((inChar >= ucBoxDblVert) && (inChar <= ucBoxDblVertHorz))
 			|| ((inChar == ucArrowUp) || (inChar == ucArrowDown))
@@ -79,25 +79,25 @@ bool isCharBorderVertical(ucs32 inChar)
 	return isVert;
 }
 
-bool isCharProgress(ucs32 inChar)
+bool isCharProgress(const ucs32 inChar)
 {
-	bool isProgress = (inChar == ucBox25 || inChar == ucBox50 || inChar == ucBox75 || inChar == ucBox100);
+	const bool isProgress = (inChar == ucBox25 || inChar == ucBox50 || inChar == ucBox75 || inChar == ucBox100);
 	return isProgress;
 }
 
-bool isCharScroll(ucs32 inChar)
+bool isCharScroll(const ucs32 inChar)
 {
-	bool isScrollbar = (inChar == ucBox25 || inChar == ucBox50 || inChar == ucBox75 || inChar == ucBox100
+	const bool isScrollbar = (inChar == ucBox25 || inChar == ucBox50 || inChar == ucBox75 || inChar == ucBox100
 	                    || inChar == ucUpScroll || inChar == ucDnScroll);
 	return isScrollbar;
 }
 
-bool isCharTriangles(ucs32 inChar)
+bool isCharTriangles(const ucs32 inChar)
 {
 	return ((inChar == ucTrgLeft) || (inChar == ucTrgRight));
 }
 
-bool isCharSeparate(ucs32 inChar)
+bool isCharSeparate(const ucs32 inChar)
 {
 	// Здесь возвращаем те символы, которые нельзя рисовать вместе с обычными буквами.
 	// Например, 0xFEFF на некоторых шрифтах вообще переключает GDI на какой-то левый шрифт O_O
@@ -158,9 +158,9 @@ bool isCharSeparate(ucs32 inChar)
 
 // All symbols, which may be displayed as "space"
 // And we don't care (here) about Zero-Width spaces!
-bool isCharSpace(ucs32 inChar)
+bool isCharSpace(const ucs32 inChar)
 {
-	bool isSpace = (inChar == ucSpace || inChar == ucNoBreakSpace
+	const bool isSpace = (inChar == ucSpace || inChar == ucNoBreakSpace
 		|| (((inChar >= 0x2000) && (inChar <= 0x3000))
 			&& ((inChar <= 0x200A)      // 0x2000..0x200A - Different typographical non-zero spaces
 				|| (inChar == 0x205F)   // Medium Math Space
@@ -174,10 +174,10 @@ bool isCharSpace(ucs32 inChar)
 }
 
 // Same as isCharSpace, but without ‘CJK Wide Space’
-bool isCharSpaceSingle(ucs32 inChar)
+bool isCharSpaceSingle(const ucs32 inChar)
 {
 	//TODO: Tabs (\t 0x09)?
-	bool isSpace = (inChar == ucSpace || inChar == ucNoBreakSpace
+	const bool isSpace = (inChar == ucSpace || inChar == ucNoBreakSpace
 		|| (((inChar >= 0x2000) && (inChar <= 0x3000))
 			&& ((inChar <= 0x200A)      // 0x2000..0x200A - Different typographical non-zero spaces
 				|| (inChar == 0x205F)   // Medium Math Space
@@ -190,9 +190,9 @@ bool isCharSpaceSingle(ucs32 inChar)
 	return isSpace;
 }
 
-bool isCharRTL(ucs32 inChar)
+bool isCharRTL(const ucs32 inChar)
 {
-	bool isRtl = (inChar >= 0x05BE)
+	const bool isRtl = (inChar >= 0x05BE)
 		&& (((inChar <= 0x08AC)
 			&& ((inChar == 0x05BE)
 				|| (inChar == 0x05C0) || (inChar == 0x05C3) || (inChar == 0x05C6)
@@ -232,17 +232,17 @@ bool isCharRTL(ucs32 inChar)
 	return isRtl;
 }
 
-bool isCharCJK(ucs32 inChar)
+bool isCharCJK(const ucs32 inChar)
 {
 	return is_char_cjk(inChar);
 }
 
-bool isCharComining(ucs32 inChar)
+bool isCharCombining(const ucs32 inChar)
 {
 	return is_char_combining(inChar);
 }
 
-bool isCharNonWord(ucs32 inChar)
+bool isCharNonWord(const ucs32 inChar)
 {
 	if (isCharSpace(inChar)
 		|| isCharSeparate(inChar)
@@ -252,7 +252,7 @@ bool isCharNonWord(ucs32 inChar)
 	return false;
 }
 
-bool isCharPunctuation(ucs32 inChar)
+bool isCharPunctuation(const ucs32 inChar)
 {
 	// .,!:;?()<>[]{}¡¿
 	return ((inChar <= 0xBF)
@@ -367,8 +367,8 @@ void VConTextPart::Done()
 
 CVConLine::CVConLine(const bool isFar)
 	: mn_DialogsCount(0)
-	, mrc_Dialogs(NULL)
-	, mn_DialogFlags(NULL)
+	, mrc_Dialogs(nullptr)
+	, mn_DialogFlags(nullptr)
 	, mn_DialogAllFlags(0)
 	, mrc_UCharMap()
 	, isFilePanel(false)
@@ -376,13 +376,13 @@ CVConLine::CVConLine(const bool isFar)
 	, FontWidth(0)
 	, isForce(true)
 	, row(0)
-	, ConCharLine(NULL)
-	, ConAttrLine(NULL)
+	, ConCharLine(nullptr)
+	, ConAttrLine(nullptr)
 	, MaxBufferSize(0)
 	, PartsCount(0)
-	, TextParts(NULL)
-	, TempCharFlags(NULL)
-	, TempCharWidth(NULL)
+	, TextParts(nullptr)
+	, TempCharFlags(nullptr)
+	, TempCharWidth(nullptr)
 	, TotalLineWidth(0)
 	, isFixFrameCoord(isFar)
 	, NextDialog(true)
@@ -838,7 +838,7 @@ struct Shrinker
 
 	Shrinker()
 	{
-		data = NULL;
+		data = nullptr;
 
 		// Default values;
 		indent_elast = 100;
@@ -861,7 +861,7 @@ struct Shrinker
 
 	void init(VConTextPart* parts, unsigned l, unsigned r, unsigned a_font_width)
 	{
-		if (data == NULL)
+		if (data == nullptr)
 		{
 			data_count = (r-l+1);
 			data = new part_data[data_count];
@@ -884,7 +884,7 @@ struct Shrinker
 
 	void get_total(VConTextPart* parts, unsigned l, unsigned r, float& total_k, int& total_l)
 	{
-		_ASSERTE(data!=NULL);
+		_ASSERTE(data!=nullptr);
 
 		total_l = 0;
 		double k_den = 0.0;
@@ -937,7 +937,7 @@ struct Shrinker
 
 		if (l == r)
 		{
-			_ASSERTE(data!=NULL);
+			_ASSERTE(data!=nullptr);
 			data[0].old_width = parts[l].TotalWidth;
 			data[0].new_width = a_req_len;
 			return ((data[0].new_width * 2) < data[0].old_width);
@@ -1172,7 +1172,7 @@ bool CVConLine::GetNextPart(unsigned& partIndex, VConTextPart*& part, VConTextPa
 	// No more parts?
 	if (partIndex >= PartsCount)
 	{
-		nextPart = NULL;
+		nextPart = nullptr;
 		return false;
 	}
 
@@ -1182,7 +1182,7 @@ bool CVConLine::GetNextPart(unsigned& partIndex, VConTextPart*& part, VConTextPa
 	// Skip all next ‘combined’ parts
 	while ((partIndex < PartsCount) && (TextParts[partIndex].Flags == TRF_None))
 		partIndex++;
-	nextPart = (partIndex < PartsCount) ? (TextParts+partIndex) : NULL;
+	nextPart = (partIndex < PartsCount) ? (TextParts+partIndex) : nullptr;
 	return true;
 }
 

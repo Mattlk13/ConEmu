@@ -36,31 +36,23 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma warning(disable: 4091)
 #include <ShlObj.h>
 
-#include "ConEmu.h"
-#include "Hotkeys.h"
-#include "Macro.h"
-#include "Match.h"
 #include "../common/EnvVar.h"
-#include "../common/WFiles.h"
-#include "../common/WUser.h"
-
-#ifdef _DEBUG
-#include "DynDialog.h"
+#include "../common/MJsonReader.h"
 #include "../common/ProcessData.h"
 #include "../common/ProcessSetEnv.h"
-#endif
-
-#ifdef _DEBUG
+#include "../common/WFiles.h"
 #include "../common/WModuleCheck.h"
+#include "../common/WUser.h"
+#include "ConEmu.h"
+#include "SettingsStorage.h"
+
+#if CE_UNIT_TEST==1
+#include "../common/MAssert.h"
+extern bool gbVerifyVerbose;
+#else
+#error "CE_UNIT_TEST should be defined for unit tests"
 #endif
 
-#ifdef _DEBUG
-#include "../common/MJsonReader.h"
-#endif
-
-#ifdef _DEBUG
-#include "Registry.h"
-#endif
 
 // Hide from global namespace
 namespace {
@@ -82,7 +74,7 @@ void UnitMaskTests()
 		{L"FileName.txt", L"File*qqq", false},
 		{L"FileName.txt", L"File*txt", true},
 		{L"FileName.txt", L"Name*txt", false},
-		{NULL}
+		{nullptr}
 	};
 	bool bCheck;
 	for (size_t i = 0; Tests[i].asFileName; i++)
@@ -106,7 +98,7 @@ void UnitDriveTests()
 		{L"\\\\?\\UNC\\Server\\Share\\Dir1\\Dir2\\File.txt", L"\\\\?\\UNC\\Server\\Share"},
 		{L"\\\\?\\C:", L"\\\\?\\C:"},
 		{L"\\\\?\\C:\\Dir1\\Dir2\\File.txt", L"\\\\?\\C:"},
-		{NULL}
+		{nullptr}
 	};
 	bool bCheck;
 	wchar_t szDrive[MAX_PATH];
@@ -124,12 +116,12 @@ void UnitPathTests()
 	struct {
 		LPCWSTR asPath, asResult;
 	} Tests[] = {
-		{L"C:", NULL},
+		{L"C:", nullptr},
 		{L"C:\\Dir1\\", L"C:\\Dir1"},
 		{L"C:\\Dir1\\File.txt", L"C:\\Dir1"},
 		{L"C:/Dir1/", L"C:/Dir1"},
 		{L"C:/Dir1/File.txt", L"C:/Dir1"},
-		{NULL}
+		{nullptr}
 	};
 	bool bCheck;
 	for (size_t i = 0; Tests[i].asPath; i++)
@@ -159,7 +151,7 @@ void UnitPathTests()
 		{L"folder 1/file", false, true},
 		{L"\\\\server\\share", true, true},
 		{L"\\\\server\\share", false, true},
-		{NULL}
+		{nullptr}
 	};
 	for (size_t i = 0; Tests2[i].asPath; ++i)
 	{
@@ -184,7 +176,7 @@ void UnitPathTests()
 		{L"C:/Dir(Dir)", false, L"/mnt/c/Dir\\(Dir\\)"},
 		{L"C:/Dir'Dir", false, L"/mnt/c/Dir\\'Dir"},
 		// #DupCygwinPath Network shares tests
-		{NULL}
+		{nullptr}
 	};
 	for (size_t i = 0; Tests3[i].asPath; i++)
 	{
@@ -208,45 +200,46 @@ void UnitFileNamesTest()
 	} Tests[] = {
 		{L"C:", L"Dir", L"File.txt", L"C:\\Dir\\File.txt"},
 		{L"C:\\", L"\\Dir\\", L"\\File.txt", L"C:\\Dir\\File.txt"},
-		{L"C:\\", L"\\File.txt", NULL, L"C:\\File.txt"},
-		{L"C:", L"\\File.txt", NULL, L"C:\\File.txt"},
-		{L"C:\\", L"File.txt", NULL, L"C:\\File.txt"},
-		{NULL}
+		{L"C:\\", L"\\File.txt", nullptr, L"C:\\File.txt"},
+		{L"C:", L"\\File.txt", nullptr, L"C:\\File.txt"},
+		{L"C:\\", L"File.txt", nullptr, L"C:\\File.txt"},
+		{nullptr}
 	};
 	bool bCheck;
-	wchar_t* pszJoin;
 	for (size_t i = 0; Tests[i].asPath; i++)
 	{
-		pszJoin = JoinPath(Tests[i].asPath, Tests[i].asPart1, Tests[i].asPart2);
+		CEStr pszJoin = JoinPath(Tests[i].asPath, Tests[i].asPart1, Tests[i].asPart2);
 		bCheck = (pszJoin && (lstrcmp(pszJoin, Tests[i].asResult) == 0));
 		_ASSERTE(bCheck);
-		SafeFree(pszJoin);
 	}
 	bCheck = true;
 }
 
 void UnitExpandTest()
 {
+	_ASSERTE(gpConEmu!=nullptr);
 	CEStr szExe;
 	wchar_t szChoc[MAX_PATH] = L"powershell -NoProfile -ExecutionPolicy unrestricted -Command \"iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))\" && SET PATH=%PATH%;%systemdrive%\\chocolatey\\bin";
-	wchar_t* pszExpanded = ExpandEnvStr(szChoc);
-	int nLen = pszExpanded ? lstrlen(pszExpanded) : 0;
+	const CEStr pszExpanded = ExpandEnvStr(szChoc);
+	const auto nLen = pszExpanded.GetLen();
 	BOOL bFound = FileExistsSearch(szChoc, szExe, false);
 	wcscpy_c(szChoc, gpConEmu->ms_ConEmuExeDir);
 	wcscat_c(szChoc, L"\\Tests\\Executables\\abcd");
 	bFound = FileExistsSearch(szChoc, szExe, false);
 	// TakeCommand
-	ConEmuComspec tcc = {cst_AutoTccCmd};
+	ConEmuComspec tcc = {};
+	tcc.csType = cst_AutoTccCmd;
 	FindComspec(&tcc, false);
 }
 
 void UnitModuleTest()
 {
-	CEStr pszConEmuCD(gpConEmu->ms_ConEmuBaseDir, L"\\", ConEmuCD_DLL_3264);
+	const CEStr pszConEmuCD(gpConEmu->ms_ConEmuBaseDir, L"\\", ConEmuCD_DLL_3264);
 	HMODULE hMod, hGetMod;
 	bool bTest;
 
-	_ASSERTE(!IsModuleValid((HMODULE)NULL));
+
+	_ASSERTE(!IsModuleValid((HMODULE)nullptr));
 	_ASSERTE(!IsModuleValid((HMODULE)INVALID_HANDLE_VALUE));
 
 	hMod = GetModuleHandle(L"kernel32.dll");
@@ -272,7 +265,7 @@ void UnitModuleTest()
 		hGetMod = GetModuleHandle(pszConEmuCD);
 		if (!hGetMod)
 			bTest = IsModuleValid(hMod);
-		_ASSERTE(!bTest || (hGetMod!=NULL));
+		_ASSERTE(!bTest || (hGetMod!=nullptr));
 	}
 	else
 	{
@@ -293,17 +286,18 @@ void DebugVersionTest()
 	DWORDLONG const dwlConditionMask = VerSetConditionMask(VerSetConditionMask(0, VER_MAJORVERSION, VER_GREATER_EQUAL), VER_MINORVERSION, VER_GREATER_EQUAL);
 
 	_ASSERTE(_WIN32_WINNT_WIN7==0x601);
-	OSVERSIONINFOEXW osvi7 = {sizeof(osvi7), HIBYTE(_WIN32_WINNT_WIN7), LOBYTE(_WIN32_WINNT_WIN7)};
-	bool bWin7 = _VerifyVersionInfo(&osvi7, VER_MAJORVERSION | VER_MINORVERSION, dwlConditionMask) != 0;
+	OSVERSIONINFOEXW osvi7 = MakeOsVersionEx(HIBYTE(_WIN32_WINNT_WIN7), LOBYTE(_WIN32_WINNT_WIN7));
+	const bool bWin7 = _VerifyVersionInfo(&osvi7, VER_MAJORVERSION | VER_MINORVERSION, dwlConditionMask) != 0;
 
 	_ASSERTE(_WIN32_WINNT_VISTA==0x600);
-	OSVERSIONINFOEXW osvi6 = {sizeof(osvi6), HIBYTE(_WIN32_WINNT_VISTA), LOBYTE(_WIN32_WINNT_VISTA)};
-	bool bWin6 = _VerifyVersionInfo(&osvi6, VER_MAJORVERSION | VER_MINORVERSION, dwlConditionMask) != 0;
+	OSVERSIONINFOEXW osvi6 = MakeOsVersionEx(HIBYTE(_WIN32_WINNT_VISTA), LOBYTE(_WIN32_WINNT_VISTA));
+	const bool bWin6 = _VerifyVersionInfo(&osvi6, VER_MAJORVERSION | VER_MINORVERSION, dwlConditionMask) != 0;
 
-	OSVERSIONINFOW osv = {sizeof(OSVERSIONINFOW)};
+	OSVERSIONINFOW osv = {};
+	osv.dwOSVersionInfoSize = sizeof(osv);
 	GetOsVersionInformational(&osv);
-	bool bVerWin7 = ((osv.dwMajorVersion > 6) || ((osv.dwMajorVersion == 6) && (osv.dwMinorVersion >= 1)));
-	bool bVerWin6 = (osv.dwMajorVersion >= 6);
+	const bool bVerWin7 = ((osv.dwMajorVersion > 6) || ((osv.dwMajorVersion == 6) && (osv.dwMinorVersion >= 1)));
+	const bool bVerWin6 = (osv.dwMajorVersion >= 6);
 
 	_ASSERTE(bWin7 == bVerWin7);
 	_ASSERTE(bWin6 == bVerWin6);
@@ -319,65 +313,6 @@ void DebugFileExistTests()
 	b = FileExists(L"C:\\Documents and Settings\\Maks\\.ipython");
 	b = FileExists(L"C:\\Documents and Settings\\Maks\\.ipython\\README");
 	b = FileExists(L"C:\\Documents and Settings\\Maks\\.ipython\\.");
-}
-
-void DebugNeedCmdUnitTests()
-{
-	BOOL b;
-	struct strTests { LPCWSTR pszCmd; BOOL bNeed; }
-	Tests[] = {
-		{L"\"C:\\windows\\notepad.exe -f \"makefile\" COMMON=\"../../../plugins/common\"\"", FALSE},
-		{L"\"\"C:\\windows\\notepad.exe  -new_console\"\"", FALSE},
-		{L"\"\"cmd\"\"", FALSE},
-		{L"cmd /c \"\"C:\\Program Files\\Windows NT\\Accessories\\wordpad.exe\" -?\"", FALSE},
-		{L"cmd /c \"dir c:\\\"", FALSE},
-		{L"abc.cmd", TRUE},
-		// Do not do too many heuristic. If user really needs redirection (for 'root'!)
-		// he must explicitly call "cmd /c ...". With only exception if first exe not found.
-		{L"notepad text & start explorer", FALSE},
-	};
-	LPCWSTR psArgs;
-	BOOL bNeedCut, bRootIsCmd, bAlwaysConfirm, bAutoDisable;
-	CEStr szExe;
-	for (INT_PTR i = 0; i < countof(Tests); i++)
-	{
-		szExe.Empty();
-		RConStartArgsEx rcs; rcs.pszSpecialCmd = lstrdup(Tests[i].pszCmd);
-		rcs.ProcessNewConArg();
-		b = IsNeedCmd(TRUE, rcs.pszSpecialCmd, szExe, &psArgs, &bNeedCut, &bRootIsCmd, &bAlwaysConfirm, &bAutoDisable);
-		_ASSERTE(b == Tests[i].bNeed);
-	}
-}
-
-void DebugCmdParserTests()
-{
-	RConStartArgsEx::RunArgTests();
-
-	struct strTests { wchar_t szTest[100], szCmp[100]; }
-	Tests[] = {
-		{ L"\"Test1 & ^ \"\" Test2\"  Test3  \"Test \"\" 4\"", L"Test1 & ^ \" Test2\0Test3\0Test \" 4\0\0" }
-	};
-
-	LPCWSTR pszSrc, pszCmp;
-	CmdArg ls;
-	int iCmp;
-	for (INT_PTR i = 0; i < countof(Tests); i++)
-	{
-		pszSrc = Tests[i].szTest;
-		pszCmp = Tests[i].szCmp;
-		while ((pszSrc = NextArg(pszSrc, ls)))
-		{
-			DemangleArg(ls, ls.mb_Quoted);
-			iCmp = wcscmp(ls.ms_Val, pszCmp);
-			if (iCmp != 0)
-			{
-				_ASSERTE(lstrcmp(ls.ms_Val, pszCmp) == 0);
-				break;
-			}
-			pszCmp += wcslen(pszCmp)+1;
-		}
-		_ASSERTE(*pszCmp == 0);
-	}
 }
 
 void DebugStrUnitTest()
@@ -401,7 +336,7 @@ void DebugStrUnitTest()
 	// Some compilation and operators check
 
 	CEStr str1;
-	LPCWSTR pszTest = Tests[0].szTest;
+	const wchar_t* pszTest = Tests[0].szTest;
 	{
 		str1 = lstrdup(pszTest);
 	}
@@ -409,8 +344,7 @@ void DebugStrUnitTest()
 	_ASSERTE(iCmp == 0);
 
 	{
-		CEStr str2(lstrdup(pszTest));
-		wchar_t* pszDup = lstrdup(pszTest);
+		const CEStr str2(lstrdup(pszTest));
 		iCmp = lstrcmp(str2, pszTest);
 		_ASSERTE(iCmp == 0 && str2.ms_Val && str2.ms_Val != pszTest);
 	}
@@ -460,9 +394,9 @@ void DebugStrUnitTest()
 		LPCWSTR pszTest;
 		CEStr szStr1(L"Test");
 		CEStr szStr2;
-		//pszTest = szStr1 ? szStr1 : L"<NULL>"; // -- expected to be cl error in VC14
-		pszTest = szStr1 ? (LPCWSTR)szStr1 : L"<NULL>";
-		pszTest = szStr2 ? (LPCWSTR)szStr2 : L"<NULL>";
+		//pszTest = szStr1 ? szStr1 : L"<nullptr>"; // -- expected to be cl error in VC14
+		pszTest = szStr1 ? (LPCWSTR)szStr1 : L"<nullptr>";
+		pszTest = szStr2 ? (LPCWSTR)szStr2 : L"<nullptr>";
 		//msprintf(szStr2.GetBuffer(128), 128, L"Str1=`%s`", szStr1); //-- would be nice to forbid or assert this. strict `(LPCWSTR)szStr1` is required here
 		UNREFERENCED_PARAMETER(pszTest);
 	}
@@ -481,7 +415,7 @@ void DebugCpUnitTest()
 		{L"ansi", CP_ACP},
 		{L"ansicp;none", CP_ACP, L';'},
 		{L"65001:1251", 65001, L':'},
-		{NULL},
+		{nullptr},
 	};
 
 	LPCWSTR pszEnd;
@@ -494,7 +428,7 @@ void DebugCpUnitTest()
 		const Test& p = Tests[i];
 		nCP = GetCpFromString(p.sString, &pszEnd);
 		_ASSERTE(nCP == p.nCP);
-		_ASSERTE((pszEnd == NULL && p.cEnd == 0) || (pszEnd && *pszEnd == p.cEnd));
+		_ASSERTE((pszEnd == nullptr && p.cEnd == 0) || (pszEnd && *pszEnd == p.cEnd));
 	}
 }
 
@@ -503,7 +437,7 @@ void DebugProcessNameTest()
 	CProcessData processes;
 	CEStr lsName(lstrdup(L"xxx.exe")), lsPath;
 	DWORD nPID = GetCurrentProcessId();
-	bool bRc = processes.GetProcessName(nPID, lsName.GetBuffer(MAX_PATH), MAX_PATH, lsPath.GetBuffer(MAX_PATH*2), MAX_PATH*2, NULL);
+	bool bRc = processes.GetProcessName(nPID, lsName.GetBuffer(MAX_PATH), MAX_PATH, lsPath.GetBuffer(MAX_PATH*2), MAX_PATH*2, nullptr);
 	_ASSERTE(bRc);
 }
 
@@ -516,7 +450,7 @@ void DebugTestSetParser()
 		&& !wcscmp(cmd.m_Commands[1]->pszName, L"V2") && !wcscmp(cmd.m_Commands[1]->pszValue, L"Value2 & Value2")
 		&& !wcscmp(cmd.m_Commands[2]->pszName, L"V3") && !wcscmp(cmd.m_Commands[2]->pszValue, L"\"Value \"\" 3 ")
 		);
-	CEStr lsTemp = cmd.Allocate(NULL);
+	CEStr lsTemp = cmd.Allocate(nullptr);
 }
 
 void DebugMapsTests()
@@ -682,28 +616,87 @@ void XmlValueConvertTest()
 
 } // end of namespace
 
-TEST(ConEmuTest,DebugUnitTests)
+class General : public testing::Test
 {
-	DebugNeedCmdUnitTests();
-	DebugCmdParserTests();
+public:
+	void SetUp() override
+	{
+		gbVerifyFailed = false;
+		gbVerifyStepFailed = false;
+		gbVerifyVerbose = false;
+	}
+
+	void TearDown() override
+	{
+	}
+};
+
+
+TEST_F(General, UnitMaskTests)
+{
 	UnitMaskTests();
+}
+TEST_F(General, UnitDriveTests)
+{
 	UnitDriveTests();
+}
+TEST_F(General, UnitPathTests)
+{
 	UnitPathTests();
+}
+TEST_F(General, UnitFileNamesTest)
+{
 	UnitFileNamesTest();
+}
+TEST_F(General, UnitExpandTest)
+{
 	UnitExpandTest();
+}
+TEST_F(General, UnitModuleTest)
+{
 	UnitModuleTest();
+}
+TEST_F(General, DebugUnitMprintfTest)
+{
 	DebugUnitMprintfTest();
+}
+TEST_F(General, DebugVersionTest)
+{
 	DebugVersionTest();
+}
+TEST_F(General, DebugFileExistTests)
+{
 	DebugFileExistTests();
+}
+TEST_F(General, DebugStrUnitTest)
+{
 	DebugStrUnitTest();
+}
+TEST_F(General, DebugCpUnitTest)
+{
 	DebugCpUnitTest();
-	CMatch::UnitTests();
-	ConEmuChord::ChordUnitTests();
-	CDynDialog::UnitTests();
+}
+TEST_F(General, DebugProcessNameTest)
+{
 	DebugProcessNameTest();
+}
+TEST_F(General, DebugTestSetParser)
+{
 	DebugTestSetParser();
+}
+TEST_F(General, DebugMapsTests)
+{
 	DebugMapsTests();
+}
+TEST_F(General, DebugArrayTests)
+{
 	DebugArrayTests();
+}
+TEST_F(General, DebugJsonTest)
+{
 	DebugJsonTest();
+}
+TEST_F(General, XmlValueConvertTest)
+{
 	XmlValueConvertTest();
 }

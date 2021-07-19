@@ -280,7 +280,7 @@ int MyAssertProc(const wchar_t* pszFile, int nLine, const wchar_t* pszTest, bool
 #ifdef _DEBUG
 	if (!abNoPipe && (gAllowAssertThread == am_Pipe))
 	{
-		HWND hConWnd = GetConEmuHWND(2);
+		HWND hConWnd = GetConEmuHWND(ConEmuWndType::ConsoleWindow);
 		HWND hGuiWnd = ghConEmuWnd;
 
 		// -- искать - нельзя. Если мы НЕ в ConEmu - нельзя стучаться в другие копии!!!
@@ -375,11 +375,10 @@ void _DEBUGSTR(LPCWSTR s)
 	}
 	else
 	{
-		wchar_t* whole = lstrmerge(szDEBUGSTRTime, psz, (nSLen && psz[nSLen-1]!=L'\n') ? L"\n" : nullptr);
+		const CEStr whole(szDEBUGSTRTime, psz, (nSLen && psz[nSLen-1]!=L'\n') ? L"\n" : nullptr);
 		if (!whole)
 			return;
-		OutputDebugString(whole);
-		free(whole);
+		OutputDebugString(whole.c_str());
 	}
 }
 #endif

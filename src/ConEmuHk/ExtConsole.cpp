@@ -30,20 +30,18 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "../common/defines.h"
 #include "../common/Common.h"
-#include "../common/ConEmuCheck.h"
 #include "../common/MRect.h"
-#include "../common/MStrDup.h"
-#include "../common/UnicodeChars.h"
-#include "../ConEmu/version.h"
 #include "ExtConsole.h"
 #include "../common/ConEmuColors3.h"
-#include "../common/WObjects.h"
 
 #include "Ansi.h"
 #include "SetHook.h"
 #include "hkConsoleOutput.h"
 #include "hkWindow.h"
 #include "hlpConsole.h"
+#include "DllOptions.h"
+
+#include <tuple>
 
 #define MSG_TITLE "ConEmu writer"
 #define MSG_INVALID_CONEMU_VER "Unsupported ConEmu version detected!\nRequired version: " CONEMUVERS "\nConsole writer'll works in 4bit mode"
@@ -83,7 +81,7 @@ struct ExtCurrentAttr
 	WORD  CONForeIdx;
 	WORD  CONBackIdx;
 
-	ConEmuColor CEColor;
+	ConEmu::Color CEColor;
 	AnnotationInfo AIColor;
 } gExtCurrentAttr;
 
@@ -100,13 +98,13 @@ static bool isCharSpace(wchar_t inChar)
 #endif
 
 
-static BOOL ExtGetBufferInfo(HANDLE &h, CONSOLE_SCREEN_BUFFER_INFO &csbi, SMALL_RECT &srWork)
+static BOOL ExtGetBufferInfo(HANDLE& h, CONSOLE_SCREEN_BUFFER_INFO& csbi, SMALL_RECT& srTrueColor)
 {
 	_ASSERTE(gbInitialized);
 
 	if (!h)
 	{
-		_ASSERTE(h!=NULL);
+		_ASSERTE(h != NULL);
 		h = GetStdHandle(STD_OUTPUT_HANDLE);
 	}
 
@@ -116,27 +114,18 @@ static BOOL ExtGetBufferInfo(HANDLE &h, CONSOLE_SCREEN_BUFFER_INFO &csbi, SMALL_
 		return FALSE;
 	}
 
-	//if (gbFarBufferMode)
-	{
-		// Фар занимает нижнюю часть консоли. Прилеплен к левому краю
-		SHORT nWidth  = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-		SHORT nHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-		srWork.Left = 0;
-		srWork.Right = nWidth - 1;
-		srWork.Top = csbi.dwSize.Y - nHeight;
-		srWork.Bottom = csbi.dwSize.Y - 1;
-	}
-	/*else
-	{
-		// Фар занимает все поле консоли
-		srWork.Left = srWork.Top = 0;
-		srWork.Right = csbi.dwSize.X - 1;
-		srWork.Bottom = csbi.dwSize.Y - 1;
-	}*/
+	// Legacy 24bit buffer is located at the bottom of the scroll buffer
 
-	if (srWork.Left < 0 || srWork.Top < 0 || srWork.Left > srWork.Right || srWork.Top > srWork.Bottom)
+	const SHORT nWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+	const SHORT nHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+	srTrueColor.Left = 0;
+	srTrueColor.Right = nWidth - 1;
+	srTrueColor.Top = csbi.dwSize.Y - nHeight;
+	srTrueColor.Bottom = csbi.dwSize.Y - 1;
+
+	if (srTrueColor.Left < 0 || srTrueColor.Top < 0 || srTrueColor.Left > srTrueColor.Right || srTrueColor.Top > srTrueColor.Bottom)
 	{
-		_ASSERTE(srWork.Left >= 0 && srWork.Top >= 0 && srWork.Left <= srWork.Right && srWork.Top <= srWork.Bottom);
+		_ASSERTE(srTrueColor.Left >= 0 && srTrueColor.Top >= 0 && srTrueColor.Left <= srTrueColor.Right && srTrueColor.Top <= srTrueColor.Bottom);
 		return FALSE;
 	}
 
@@ -253,7 +242,7 @@ BOOL ExtGetAttributes(ExtAttributesParm* Info)
 	{
 		_ASSERTE(FALSE && "ExtGetBufferInfo failed in ExtGetAttributes");
 		gExtCurrentAttr.WasSet = false;
-		gExtCurrentAttr.CEColor.Flags = CECF_NONE;
+		gExtCurrentAttr.CEColor.Flags = ConEmu::ColorFlags::None;
 		gExtCurrentAttr.CEColor.ForegroundColor = defConForeIdx;
 		gExtCurrentAttr.CEColor.BackgroundColor = defConBackIdx;
 		memset(&gExtCurrentAttr.AIColor, 0, sizeof(gExtCurrentAttr.AIColor));
@@ -274,7 +263,7 @@ BOOL ExtGetAttributes(ExtAttributesParm* Info)
 		memset(&gExtCurrentAttr.CEColor, 0, sizeof(gExtCurrentAttr.CEColor));
 		memset(&gExtCurrentAttr.AIColor, 0, sizeof(gExtCurrentAttr.AIColor));
 
-		Info->Attributes.Flags = CECF_NONE;
+		Info->Attributes.Flags = ConEmu::ColorFlags::None;
 		Info->Attributes.ForegroundColor = CONFORECOLOR(csbi.wAttributes);
 		Info->Attributes.BackgroundColor = CONBACKCOLOR(csbi.wAttributes);
 	}
@@ -282,24 +271,24 @@ BOOL ExtGetAttributes(ExtAttributesParm* Info)
 	return TRUE;
 }
 
-static void ExtPrepareColor(const ConEmuColor& Attributes, AnnotationInfo& t, WORD& n)
+static void ExtPrepareColor(const ConEmu::Color& Attributes, AnnotationInfo& t, WORD& n)
 {
 	//-- zeroing must be done by calling function
 	//memset(&t, 0, sizeof(t)); n = 0;
 
-	const CECOLORFLAGS& Flags = Attributes.Flags;
+	const auto& Flags = Attributes.Flags;
 	t.style = 0;
-	if (Flags & CECF_FG_BOLD)
+	if (Flags & ConEmu::ColorFlags::Bold)
 		t.style |= AI_STYLE_BOLD;
-	if (Flags & CECF_FG_ITALIC)
+	if (Flags & ConEmu::ColorFlags::Italic)
 		t.style |= AI_STYLE_ITALIC;
-	if (Flags & CECF_FG_UNDERLINE)
+	if (Flags & ConEmu::ColorFlags::Underline)
 		t.style |= AI_STYLE_UNDERLINE;
-	if (Flags & CECF_REVERSE)
+	if (Flags & ConEmu::ColorFlags::Reverse)
 		t.style |= AI_STYLE_REVERSE;
 
 	DWORD nForeColor, nBackColor;
-	if (Flags & CECF_FG_24BIT)
+	if (Flags & ConEmu::ColorFlags::Fg24Bit)
 	{
 		//n |= 0x07;
 		nForeColor = Attributes.ForegroundColor & 0x00FFFFFF;
@@ -314,7 +303,7 @@ static void ExtPrepareColor(const ConEmuColor& Attributes, AnnotationInfo& t, WO
 		t.fg_valid = FALSE;
 	}
 
-	if (Flags & CECF_BG_24BIT)
+	if (Flags & ConEmu::ColorFlags::Bg24Bit)
 	{
 		nBackColor = Attributes.BackgroundColor & 0x00FFFFFF;
 		Far3Color::Color2BgIndex(nBackColor, nBackColor==nForeColor, n);
@@ -327,9 +316,9 @@ static void ExtPrepareColor(const ConEmuColor& Attributes, AnnotationInfo& t, WO
 		t.bk_valid = FALSE;
 	}
 
-	if (Flags & CECF_FG_UNDERLINE)
+	if (Flags & ConEmu::ColorFlags::Underline)
 		n |= COMMON_LVB_UNDERSCORE;
-	if (Flags & CECF_REVERSE)
+	if (Flags & ConEmu::ColorFlags::Reverse)
 		n |= COMMON_LVB_REVERSE_VIDEO;
 }
 
@@ -358,7 +347,7 @@ BOOL ExtSetAttributes(const ExtAttributesParm* Info)
 
 	BOOL lbRc = TRUE;
 
-	// <G|S>etTextAttributes должны ожидать указатель на ОДИН ConEmuColor.
+	// <G|S>etTextAttributes должны ожидать указатель на ОДИН ConEmu::Color.
 	AnnotationInfo t = {};
 	WORD n = 0;
 	ExtPrepareColor(Info->Attributes, t, n);
@@ -558,22 +547,22 @@ BOOL WINAPI ExtReadOutput(ExtReadWriteOutputParm* Info)
 				{
 					*BufPtr.CEBuffer = *pc;
 
-					ConEmuColor clr = {};
+					ConEmu::Color clr = {};
 
 					if (pTrueColor)
 					{
 						DWORD Style = pTrueColor->style;
 						if (Style & AI_STYLE_BOLD)
-							clr.Flags |= CECF_FG_BOLD;
+							clr.Flags |= ConEmu::ColorFlags::FG_BOLD;
 						if (Style & AI_STYLE_ITALIC)
-							clr.Flags |= CECF_FG_ITALIC;
+							clr.Flags |= ConEmu::ColorFlags::FG_ITALIC;
 						if (Style & AI_STYLE_UNDERLINE)
-							clr.Flags |= CECF_FG_UNDERLINE;
+							clr.Flags |= ConEmu::ColorFlags::FG_UNDERLINE;
 					}
 
 					if (pTrueColor && pTrueColor->fg_valid)
 					{
-						clr.Flags |= CECF_FG_24BIT;
+						clr.Flags |= ConEmu::ColorFlags::FG_24BIT;
 						clr.ForegroundColor = pTrueColor->fg_color;
 					}
 					else
@@ -583,7 +572,7 @@ BOOL WINAPI ExtReadOutput(ExtReadWriteOutputParm* Info)
 
 					if (pTrueColor && pTrueColor->bk_valid)
 					{
-						clr.Flags |= CECF_BG_24BIT;
+						clr.Flags |= ConEmu::ColorFlags::BG_24BIT;
 						clr.BackgroundColor = pTrueColor->bk_color;
 					}
 					else
@@ -747,12 +736,12 @@ BOOL WINAPI ExtWriteOutput(const ExtReadWriteOutputParm* Info)
 
 					unsigned __int64 Flags = BufPtr.CEColor->Flags;
 
-					Bold = (Flags & CECF_FG_BOLD) != 0;
-					Italic = (Flags & CECF_FG_ITALIC) != 0;
-					Underline = (Flags & CECF_FG_UNDERLINE) != 0;
+					Bold = (Flags & ConEmu::ColorFlags::FG_BOLD) != 0;
+					Italic = (Flags & ConEmu::ColorFlags::FG_ITALIC) != 0;
+					Underline = (Flags & ConEmu::ColorFlags::FG_UNDERLINE) != 0;
 
-					Fore24bit = (Flags & CECF_FG_24BIT) != 0;
-					Back24bit = (Flags & CECF_BG_24BIT) != 0;
+					Fore24bit = (Flags & ConEmu::ColorFlags::FG_24BIT) != 0;
+					Back24bit = (Flags & ConEmu::ColorFlags::BG_24BIT) != 0;
 
 					ForegroundColor = BufPtr.CEColor->ForegroundColor & (Fore24bit ? COLORMASK : INDEXMASK);
 					BackgroundColor = BufPtr.CEColor->BackgroundColor & (Back24bit ? COLORMASK : INDEXMASK);
@@ -889,7 +878,7 @@ BOOL WINAPI apiWriteConsoleW(HANDLE hConsoleOutput, const VOID *lpBuffer, DWORD 
 	{
 		_ASSERTE(FALSE && "Is not supposed to be used out of ConEmuHk itself, therefore lpfn must be passed into");
 		{
-			HMODULE hHooks = GetModuleHandle(WIN3264TEST(L"ConEmuHk.dll",L"ConEmuHk64.dll"));
+			HMODULE hHooks = GetModuleHandle(ConEmuHk_DLL_3264);
 			if (hHooks && (hHooks != ghOurModule))
 			{
 				typedef FARPROC (WINAPI* GetWriteConsoleW_t)();
@@ -997,12 +986,13 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 	}
 
 	#ifdef _DEBUG
-	extern FARPROC CallWriteConsoleW;
+	// extern FARPROC CallWriteConsoleW;
 	_ASSERTE((CallWriteConsoleW!=NULL) || !HooksWereSet);
-	_ASSERTE((Info->Private==NULL) || (Info->Private==(void*)CallWriteConsoleW) || (!HooksWereSet && (Info->Private==(void*)WriteConsoleW)));
+	// ReSharper disable twice CppCStyleCast
+	_ASSERTE((Info->Private == NULL) || (Info->Private == (void*)CallWriteConsoleW) || (!HooksWereSet && (Info->Private == (void*)WriteConsoleW)));
 	#endif
 
-	// Проверка аргументов
+	// Arguments validation
 	if (!Info->ConsoleOutput || !Info->Buffer || !Info->NumberOfCharsToWrite)
 	{
 		_ASSERTE(Info->ConsoleOutput && Info->Buffer && Info->NumberOfCharsToWrite);
@@ -1028,22 +1018,22 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 	DWORD Mode = 0;
 
 	// "Working lines" may be defined (Vim and others)
-	LONG  ScrollTop, ScrollBottom;
+	LONG  scrollTop = 0, scrollBottom = 0;
 	bool  bScrollRegion = !!(Info->Flags & ewtf_Region);
 	RECT  rcScrollRegion = Info->Region;
-	COORD crScrollCursor;
+	COORD crScrollCursor = {};
 	if (bScrollRegion)
 	{
 		_ASSERTEX(Info->Region.left==-1 && Info->Region.right==-1); // Not used yet
 		rcScrollRegion.left = 0; rcScrollRegion.right = (csbi.dwSize.X - 1);
 		_ASSERTEX(Info->Region.top>=0 && Info->Region.bottom>=Info->Region.top);
-		ScrollTop = Info->Region.top;
-		ScrollBottom = Info->Region.bottom+1;
+		scrollTop = Info->Region.top;
+		scrollBottom = Info->Region.bottom+1;
 	}
 	else
 	{
-		ScrollTop = 0;
-		ScrollBottom = csbi.dwSize.Y;
+		scrollTop = 0;
+		scrollBottom = csbi.dwSize.Y;
 	}
 
 	GetConsoleModeCached(h, &Mode);
@@ -1148,9 +1138,22 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 		}
 		*/
 
+		enum class ControlChars
+		{
+			None = 0,
+			Backspace = 1,
+			Return = 2,
+			NewLine = 4,
+			Tab = 8,
+		};
+		ControlChars controlChars = ControlChars::None;
+		auto setCtrlChar = [&controlChars](const ControlChars c)
+		{
+			controlChars = static_cast<ControlChars>(static_cast<int>(controlChars) | static_cast<int>(c));
+		};
+
 		SHORT ForceDumpX = 0;
-		bool BSRN = false;
-		bool bForceDumpScroll = false;
+		bool dumpBuffer = false;
 		bool bSkipBELL = false;
 		bool bAdvanceCur = false;
 
@@ -1160,34 +1163,54 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 		switch (*pCur)
 		{
 		case L'\t':
-			if (x2>x)
-				ForceDumpX = x2;
-			x2 = ((x2 + 8) >> 3) << 3;
-			BSRN = true; bIntCursorOp = true;
+			if (x2 > x)
+			{
+				if ((ForceDumpX = x2) > 0)
+					dumpBuffer = true;
+			}
+			x2 = static_cast<SHORT>(((x2 + 8) >> 3) << 3);
+			setCtrlChar(ControlChars::Tab);
+			bIntCursorOp = true;
 			break;
 		case L'\r':
 			if (x2 > 0)
-				ForceDumpX = x2-1;
+			{
+				ForceDumpX = x2 - 1;
+				dumpBuffer = true;
+			}
 			x2 = 0;
 			bIntCursorOp = false;
-			BSRN = true;
+			setCtrlChar(ControlChars::Return);
 			// "\r\n"? Do not break in two physical writes
-			if (((pCur+1) < pEnd) && (*(pCur+1) == L'\n'))
-				pCur++; // continue to L'\n' section
+			if (((pCur + 1) < pEnd) && (*(pCur + 1) == L'\n'))
+			{
+				++pCur; // continue to L'\n' section
+			}
 			else
+			{
 				break;
+			}
 		case L'\n':
 			if (x2 > 0)
-				ForceDumpX = x2-1;
+			{
+				ForceDumpX = x2 - 1;
+				dumpBuffer = true;
+			}
 			if (bAutoLfNl)
+			{
 				x2 = 0;
-			else if (x2)
+			}
+			if (x2 > 0 || bAutoLfNl)
+			{
 				bIntCursorOp = true;
-			y2++;
-			if (y2 >= ScrollBottom)
-				bForceDumpScroll = true;
+			}
+			++y2;
+			if (y2 >= scrollBottom)
+			{
+				dumpBuffer = true;
+			}
 			_ASSERTE(bWrap);
-			BSRN = true;
+			setCtrlChar(ControlChars::NewLine);
 			CEAnsi::StorePromptReset();
 			break;
 		case 7:
@@ -1195,8 +1218,10 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 			if ((Info->Flags & ewtf_NoBells))
 			{
 				LogBeepSkip(L"--- Skipped ExtWriteText(7)\n");
-				bForceDumpScroll = bSkipBELL = true;
-				bAdvanceCur = true; --pCur;
+				dumpBuffer = true;
+				bSkipBELL = true;
+				bAdvanceCur = true;
+				--pCur;
 			}
 			else
 			{
@@ -1205,11 +1230,16 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 			break;
 		case 8: // L'\b'
 			//BS
-			if (x2>x)
-				ForceDumpX = x2;
-			if (x2>0)
-				x2--;
-			BSRN = true;
+			if (x2 > x)
+			{
+				if ((ForceDumpX = x2) > 0)
+					dumpBuffer = true;
+			}
+			if (x2 > 0)
+			{
+				--x2;
+			}
+			setCtrlChar(ControlChars::Backspace);
 			bIntCursorOp = true;
 			// Don't pass '\b' to WriteText (problem in Win10 build)
 			bAdvanceCur = true; --pCur;
@@ -1222,13 +1252,15 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 			if ((x2 >= WrapAtCol)
 				&& (!bRevertMode || ((pCur+1) < pEnd)))
 			{
-				ForceDumpX = std::min(x2, WrapAtCol)-1;
-				x2 = 0; y2++;
+				if ((ForceDumpX = std::min(x2, WrapAtCol) - 1) > 0)
+					dumpBuffer = true;
+				x2 = 0;
+				++y2;
 			}
 		}
 
 
-		if (ForceDumpX || bForceDumpScroll)
+		if (dumpBuffer)
 		{
 			// Printing (including pCur) using extended attributes
 			if (pCur >= pFrom)
@@ -1261,15 +1293,14 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 			}
 		}
 
-		// После BS - сменить "начальную" координату
-		if (BSRN)
+		if (controlChars != ControlChars::None)
 			x = x2;
 
 		// При смене строки
 		if (y2 > y)
 		{
 			//_ASSERTE(bWrap && L"для !Wrap - доделать");
-			if (y2 >= ScrollBottom/*csbi.dwSize.Y*/)
+			if (y2 >= scrollBottom/*csbi.dwSize.Y*/)
 			{
 				// Экран прокрутился на одну строку вверх
 
@@ -1281,7 +1312,7 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 					Shift.Flags |= essf_Region;
 					Shift.Region = rcScrollRegion;
 					//Shift.Region.top += (y2-y);
-					if (ScrollBottom >= csbi.dwSize.Y)
+					if (scrollBottom >= csbi.dwSize.Y)
 						Shift.Flags |= essf_ExtOnly;
 				}
 				else
@@ -1293,10 +1324,10 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 				Info->ScrolledRowsUp++;
 
 				// координату - "отмотать" (она как бы не изменилась)
-				if (bScrollRegion && (ScrollBottom < csbi.dwSize.Y))
+				if (bScrollRegion && (scrollBottom < csbi.dwSize.Y))
 				{
-					y2 = LOSHORT(ScrollBottom) - 1;
-					_ASSERTEX((int)y2 == (int)(ScrollBottom - 1));
+					y2 = LOSHORT(scrollBottom) - 1;
+					_ASSERTEX((int)y2 == (int)(scrollBottom - 1));
 
 					crScrollCursor.X = x2;
 					crScrollCursor.Y = y2;
@@ -1325,8 +1356,8 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 		// '\b': move cursor backward by one cell, don't erase cell, don't move cursor upward
 		if (bIntCursorOp)
 		{
-			_ASSERTE(x2>0);
-			_ASSERTE(pCur < pEnd && (*pCur == L'\n' || *pCur == L'\t' || *pCur == L'\b') && (pFrom == pCur || pFrom == pCur+1));
+			_ASSERTE(x2 > 0 || (static_cast<int>(controlChars) & (static_cast<int>(ControlChars::Backspace) | static_cast<int>(ControlChars::NewLine))));
+			_ASSERTE((pCur < pEnd) && (*pCur == L'\n' || *pCur == L'\t' || *pCur == L'\b') && (pFrom <= pCur + 1));
 			bIntCursorOp = false;
 			crScrollCursor.X = x2;
 			crScrollCursor.Y = y2;
@@ -1386,6 +1417,8 @@ BOOL ExtWriteText(ExtWriteTextParm* Info)
 	if (lbRc)
 		Info->NumberOfCharsWritten = Info->NumberOfCharsToWrite;
 
+	std::ignore = scrollTop;
+	std::ignore = bVirtualWrap;
 	return lbRc;
 }
 
@@ -1431,7 +1464,7 @@ BOOL ExtFillOutput(ExtFillOutputParm* Info)
 		}
 		else if (Info->Flags & efof_ResetExt)
 		{
-			Info->FillAttr.Flags = CECF_NONE;
+			Info->FillAttr.Flags = ConEmu::ColorFlags::None;
 			// Цвет - без разницы. Будут сброшены только расширенные атрибуты,
 			// реальный цвет в консоли оставляем без изменений
 			Info->FillAttr.ForegroundColor = 7;
@@ -1601,7 +1634,7 @@ BOOL ExtScrollLine(ExtScrollScreenParm* Info)
 	}
 	else
 	{
-		INT_PTR ccCellsTotal = (csbi.dwSize.X - csbi.dwCursorPosition.X - 1);
+		INT_PTR ccCellsTotal = (csbi.dwSize.X - csbi.dwCursorPosition.X);
 		INT_PTR ccCellsMove = ccCellsTotal - _abs(nDir);
 		INT_PTR ccCellsClear = _abs(nDir);
 		COORD crf = csbi.dwCursorPosition;
@@ -1677,26 +1710,35 @@ BOOL ExtScrollScreen(ExtScrollScreenParm* Info)
 
 	HANDLE h = Info->ConsoleOutput;
 	CONSOLE_SCREEN_BUFFER_INFO csbi = {};
-	SMALL_RECT srWork = {};
-	if (!ExtGetBufferInfo(h, csbi, srWork))
+	SMALL_RECT srTrueColor = {};
+	if (!ExtGetBufferInfo(h, csbi, srTrueColor))
 		return FALSE;
+	const SMALL_RECT srView = csbi.srWindow;
 
 	BOOL lbRc = TRUE;
-	COORD crSize = {csbi.dwSize.X,1};
-	COORD cr0 = {};
-	//RECT rcRgn = Info->Region;
 	int SrcLineTop = 0, SrcLineBottom = 0, DstLineTop = 0;
-	int nDir = (int)Info->Dir;
+	int nDir = static_cast<int>(Info->Dir);
 
 	if (Info->Flags & essf_Global)
 	{
 		if (Info->Flags & essf_Region)
 		{
+			if ((Info->Dir < 0) && (Info->Region.bottom == csbi.dwSize.Y)
+				&& (Info->Region.top == 0) && (Info->Region.bottom == -Info->Dir))
+			{
+				// We get here if cmd "cls" is called
+				int nLines = csbi.dwSize.Y;
+				ExtFillOutputParm f = { sizeof(f), efof_Attribute | efof_Character, Info->ConsoleOutput,
+					Info->FillAttr, Info->FillChar, COORD{0, 0}, uint32_t(csbi.dwSize.X) * nLines };
+				ExtFillOutput(&f);
+				return FALSE;
+			}
+
 			RECT rcDest = {};
-			if (!IntersectSmallRect(Info->Region, srWork, &rcDest))
+			if (!IntersectSmallRect(Info->Region, srTrueColor, &rcDest))
 				return FALSE; // Nothing to scroll
 			// We need absolute coordinates here
-			Info->Region = rcDest;
+			srTrueColor = SMALL_RECT{ SHORT(rcDest.left), SHORT(rcDest.top), SHORT(rcDest.right), SHORT(rcDest.bottom) };
 		}
 	}
 
@@ -1727,63 +1769,30 @@ BOOL ExtScrollScreen(ExtScrollScreenParm* Info)
 	{
 		if (nDir < 0)
 		{
-			DstLineTop = srWork.Top;
-			SrcLineTop = srWork.Top + (-nDir);
-			SrcLineBottom = csbi.dwSize.Y - 1;
+			DstLineTop = srView.Top;
+			SrcLineTop = static_cast<int>(srView.Top) + (-nDir);
+			SrcLineBottom = static_cast<int>(srView.Bottom) + (-nDir);
 		}
 		else if (nDir > 0)
 		{
-			DstLineTop = srWork.Top + nDir;
-			SrcLineTop = srWork.Top;
-			SrcLineBottom = (csbi.dwSize.Y - 1) - nDir;
+			DstLineTop = srView.Top + nDir;
+			SrcLineTop = srView.Top;
+			SrcLineBottom = srView.Bottom;
 		}
 	}
 
-	if ((Info->Flags & essf_Global)
-		&& (SrcLineBottom < SrcLineTop)
-		&& (SrcLineTop == -Info->Dir))
-	{
-		// We get here if cmd "cls" is called
-		int nLines = csbi.dwSize.Y - cr0.Y;
-		ExtFillOutputParm f = {sizeof(f), efof_Attribute|efof_Character, Info->ConsoleOutput,
-			Info->FillAttr, Info->FillChar, cr0, csbi.dwSize.X * nLines};
-		ExtFillOutput(&f);
-		return FALSE;
-	}
-
-
 	// Размер TrueColor буфера
-	SHORT nWindowWidth  = srWork.Right - srWork.Left + 1;
-	SHORT nWindowHeight = srWork.Bottom - srWork.Top + 1;
+	SHORT nWindowWidth  = srTrueColor.Right - srTrueColor.Left + 1;
+	SHORT nWindowHeight = srTrueColor.Bottom - srTrueColor.Top + 1;
 
 	AnnotationInfo* pTrueColorStart = (AnnotationInfo*)(gpTrueColor ? (((LPBYTE)gpTrueColor) + gpTrueColor->struct_size) : NULL); //-V104
 	DEBUGTEST(AnnotationInfo* pTrueColorEnd = pTrueColorStart ? (pTrueColorStart + gpTrueColor->bufferSize) : NULL); //-V104
 
 	if (Info->Flags & essf_Current)
 	{
-		ExtAttributesParm DefClr = {sizeof(DefClr), h};
+		ExtAttributesParm DefClr = {sizeof(DefClr), h, ConEmu::Color{}};
 		ExtGetAttributes(&DefClr);
 		Info->FillAttr = DefClr.Attributes;
-	}
-
-	if (Info->Flags & essf_Pad)
-	{
-		_ASSERTE(Info->Dir == -1);
-		nDir = -1;
-
-		// Пробелами добивать? Хотя вроде и не нужно. Это при "виртуальном" врапе на заданную границу зовется.
-
-		/*
-		COORD crFrom = {csbi.dwCursorPosition.X, csbi.dwCursorPosition.Y};
-		nCount = csbi.dwSize.X - csbi.dwCursorPosition.X;
-
-		ExtFillOutputParm f = {sizeof(f), efof_Attribute|efof_Character, Info->ConsoleOutput,
-			Info->FillAttr, Info->FillChar, crFrom, nCount};
-		lbRc = ExtFillOutput(&f);
-
-		if (lbRc)
-			nDir = -1;
-		*/
 	}
 
 
@@ -1796,14 +1805,14 @@ BOOL ExtScrollScreen(ExtScrollScreenParm* Info)
 	if (nDir < 0)
 	{
 		// Scroll whole page up by n (default 1) lines. New lines are added at the bottom.
-		if (gpTrueColor)
+		if (gpTrueColor && (SrcLineBottom >= srTrueColor.Top))
 		{
 			int nMaxCell = std::min(nWindowWidth * nWindowHeight,gpTrueColor->bufferSize);
 			int nMaxRows = nMaxCell / nWindowWidth;
 			//_ASSERTEX(SrcLineTop >= srWork.Top); That will be if visible region is ABOVE our TrueColor region
 			int nShiftRows = -nDir; // 1
-			int nY1 = std::min(std::max((SrcLineTop - srWork.Top),nShiftRows),nMaxRows);    // 2
-			int nY2 = std::min(std::max((SrcLineBottom - srWork.Top),nShiftRows),nMaxRows); // 6
+			int nY1 = std::min(std::max((SrcLineTop - srTrueColor.Top),nShiftRows),nMaxRows);    // 2
+			int nY2 = std::min(std::max((SrcLineBottom - srTrueColor.Top),nShiftRows),nMaxRows); // 6
 			int nRows = nY2 - nY1 + 1; // 5
 
 			if (nRows > 0)
@@ -1844,60 +1853,62 @@ BOOL ExtScrollScreen(ExtScrollScreenParm* Info)
 
 		if (!(Info->Flags & essf_ExtOnly))
 		{
-			CHAR_INFO cFill = {{Info->FillChar}};
+			CHAR_INFO cFill = {{Info->FillChar}, 0};
+			AnnotationInfo t = {};
+			ExtPrepareColor(Info->FillAttr, t, cFill.Attributes);
 
 			if (SrcLineBottom >= SrcLineTop)
 			{
-				SMALL_RECT rcSrc = MakeSmallRect(0, SrcLineTop, csbi.dwSize.X-1, SrcLineBottom);
-				COORD crDst = MakeCoord(0, SrcLineTop + nDir/*<0*/);
-				F(ScrollConsoleScreenBufferW)(Info->ConsoleOutput, &rcSrc, NULL, crDst, &cFill);
-			}
-			//else ?
-			//AnnotationInfo t = {};
-			//ExtPrepareColor(Info->FillAttr, t, cFill.Attributes);
+				const SMALL_RECT rcSrc = MakeSmallRect(0, SrcLineTop, csbi.dwSize.X-1, SrcLineBottom);
+				const SMALL_RECT* lpClip = ((Info->Flags & essf_Region) && !(Info->Flags & essf_Global)) ? &srView : nullptr;
+				_ASSERTEX(DstLineTop == (SrcLineTop + nDir/*<0*/));
+				const COORD crDst = MakeCoord(0, DstLineTop);
 
-			if (nDir < 0)
-			{
-				cr0.Y = std::max(0,(SrcLineBottom + nDir + 1));
-				int nLines = SrcLineBottom - cr0.Y + 1;
-				ExtFillOutputParm f = {sizeof(f), efof_Attribute|efof_Character, Info->ConsoleOutput,
-					Info->FillAttr, Info->FillChar, cr0, csbi.dwSize.X * nLines};
-				ExtFillOutput(&f);
+				F(ScrollConsoleScreenBufferW)(Info->ConsoleOutput, &rcSrc, lpClip, crDst, &cFill);
 			}
+
+			_ASSERTE(nDir < 0);
+			const SHORT fillTop = std::max(0,(SrcLineBottom + nDir + 1));
+			_ASSERTE(SrcLineBottom >= fillTop);
+			const uint32_t nLines = SrcLineBottom - fillTop + 1;
+			ExtFillOutputParm f = { sizeof(f), efof_Attribute | efof_Character, Info->ConsoleOutput,
+				Info->FillAttr, Info->FillChar, COORD{0, fillTop}, uint32_t(csbi.dwSize.X) * nLines };
+			ExtFillOutput(&f);
 		}
 	}
 	else if (nDir > 0)
 	{
 		// Scroll whole page down by n (default 1) lines. New lines are added at the top.
-		if (gpTrueColor)
+		if (gpTrueColor && ((SrcLineBottom + nDir) >= srTrueColor.Top))
 		{
 			int nMaxCell = std::min(nWindowWidth * nWindowHeight,gpTrueColor->bufferSize);
 			int nMaxRows = nMaxCell / nWindowWidth;
 			//_ASSERTEX(SrcLineTop >= srWork.Top); That will be if visible region is ABOVE our TrueColor region
 			int nShiftRows = nDir;
 			int nMaxRowsShift = nMaxRows - nShiftRows;
-			int nY1 = std::min(std::max((SrcLineTop - srWork.Top),0),nMaxRowsShift);
-			int nY2 = std::min(std::max((SrcLineBottom - srWork.Top),0),nMaxRowsShift);
+			int nY1 = std::min(std::max((SrcLineTop - srTrueColor.Top),0),nMaxRowsShift);
+			int nY2 = std::min(std::max((SrcLineBottom - srTrueColor.Top),0),nMaxRowsShift);
 			int nRows = nY2 - nY1 + 1;
 
 			if (nRows > 0)
 			{
 				//if (nRows >= nDir)
 				{
-					ssize_t dest = ((nY1 + nDir) * nWindowWidth);
-					ssize_t from = (nY1 * nWindowWidth);
-					ssize_t ccCells = nRows * nWindowWidth;
+					const ssize_t dest = ((nY1 + ssize_t(nDir)) * ssize_t(nWindowWidth));
+					const ssize_t from = (nY1 * ssize_t(nWindowWidth));
+					const ssize_t ccCells = nRows * ssize_t(nWindowWidth);
 
 					ExtMoveColorData(dest, from, ccCells);
 				}
 
 				if (Info->Flags & essf_ExtOnly)
 				{
-					TODO("Чем заливать");
-					AnnotationInfo AIInfo = {};
-					for (int i = (nDir*nWindowWidth)-1; i > 0; i--)
+					AnnotationInfo aiInfo = {}; WORD n = 0;
+					ExtPrepareColor(Info->FillAttr, aiInfo, n);
+
+					for (int i = (nDir * nWindowWidth) - 1; i > 0; i--)
 					{
-						pTrueColorStart[i] = AIInfo;
+						pTrueColorStart[i] = aiInfo;
 					}
 				}
 			}
@@ -1905,25 +1916,29 @@ BOOL ExtScrollScreen(ExtScrollScreenParm* Info)
 
 		if (!(Info->Flags & essf_ExtOnly))
 		{
-			SMALL_RECT rcSrc = MakeSmallRect(0, SrcLineTop, csbi.dwSize.X-1, SrcLineBottom);
-			COORD crDst = MakeCoord(0, SrcLineTop + nDir/*>0*/);
 			AnnotationInfo t = {};
-			CHAR_INFO cFill = {{Info->FillChar}};
+			CHAR_INFO cFill = {{Info->FillChar}, 0};
 			ExtPrepareColor(Info->FillAttr, t, cFill.Attributes);
 
-			F(ScrollConsoleScreenBufferW)(Info->ConsoleOutput, &rcSrc, NULL, crDst, &cFill);
-
-			if (nDir > 0)
+			if (SrcLineBottom >= SrcLineTop)
 			{
-				cr0.Y = SrcLineTop;
-				ExtFillOutputParm f = {sizeof(f), efof_Attribute|efof_Character, Info->ConsoleOutput,
-					Info->FillAttr, Info->FillChar, cr0, csbi.dwSize.X * nDir};
-				ExtFillOutput(&f);
+				const SMALL_RECT rcSrc = MakeSmallRect(0, SrcLineTop, csbi.dwSize.X - 1, SrcLineBottom);
+				const SMALL_RECT* lpClip = (Info->Flags & essf_Region) ? &srView : nullptr;
+				_ASSERTEX(DstLineTop == (SrcLineTop + nDir/*>0*/));
+				const COORD crDst = MakeCoord(0, DstLineTop);
+
+				F(ScrollConsoleScreenBufferW)(Info->ConsoleOutput, &rcSrc, lpClip, crDst, &cFill);
 			}
+
+			_ASSERTE(nDir > 0);
+			const SHORT fillTop = SrcLineTop;
+			ExtFillOutputParm f = {sizeof(f), efof_Attribute|efof_Character, Info->ConsoleOutput,
+				Info->FillAttr, Info->FillChar, COORD{0, fillTop}, uint32_t(csbi.dwSize.X)* nDir };
+			ExtFillOutput(&f);
 		}
 	}
 
-	// накрутить индекс в AnnotationInfo
+	// Increment index in the AnnotationInfo
 	if (gpTrueColor)
 	{
 		gpTrueColor->flushCounter++;
@@ -1953,7 +1968,7 @@ BOOL ExtCommit(ExtCommitParm* Info)
 	TODO("ExtCommit: Info->ConsoleOutput");
 
 	// Если буфер не был создан - то и передергивать нечего
-	if (gpTrueColor != NULL)
+	if (gpTrueColor != nullptr)
 	{
 		if (gpTrueColor->locked)
 		{

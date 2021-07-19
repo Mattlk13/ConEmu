@@ -44,7 +44,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma warning(push)
 #pragma warning(disable: 4091)
 #endif
-#include <Windows.h>
+#include <windows.h>
 #if !defined(__GNUC__) || defined(__MINGW32__)
 #pragma warning(pop)
 #endif
@@ -141,6 +141,7 @@ WARNING("WIN64 was not defined");
 
 #if defined(_MSC_VER) && (_MSC_VER <= 1500)
 	#undef HAS_CPP11
+	#error C++11 capable compiler is required
 #elif defined(__GNUC__)
 	#define HAS_CPP11
 #else
@@ -160,12 +161,18 @@ WARNING("WIN64 was not defined");
 
 
 #ifdef _WIN64
+// ReSharper disable once IdentifierTypo,CppInconsistentNaming
 using ssize_t = int64_t;
 #else
+// ReSharper disable once IdentifierTypo,CppInconsistentNaming
 using ssize_t = int32_t;
 #endif
 
+// ReSharper disable once CppInconsistentNaming
 using uint = uint32_t;
+
+
+#define MAX_WIDE_PATH_LENGTH 0x8000
 
 
 // GCC headers do not describe Task Scheduler 2.0 interfaces
@@ -186,7 +193,7 @@ using uint = uint32_t;
 #define isAlpha(c) (IsCharAlpha(c))
 #define isSpace(c) ((c)==L' ' || (c)==L'\xA0' || (c)==L'\t' || (c)==L'\r' || (c)==L'\n')
 
-#define LODWORD(ull) ((DWORD)((ULONGLONG)(ull) & 0x00000000ffffffff))
+#define LODWORD(ull) ((DWORD)((ULONGLONG)(ull) & 0x00000000ffffffffULL))
 #define LOLONG(ull)  ((LONG)LODWORD(ull))
 #define HIDWORD(ull) ((DWORD)((ULONGLONG)(ull)>>32))
 #define LOSHORT(ll)  ((SHORT)LOWORD(ll))
@@ -292,6 +299,7 @@ extern void _DEBUGSTR(LPCWSTR s);
 #endif
 
 #include "MStrSafe.h"
+// ReSharper disable once CppUnusedIncludeDirective
 #include "Memory.h"
 
 // Compares the *pv value with the cmp value. If the *pv value is equal to the cmp value,

@@ -29,11 +29,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define HIDE_USE_EXCEPTION_INFO
 #include "Common.h"
-#include "Memory.h"
 #include "ConEmuCheck.h"
 #include "ConEmuPipeMode.h"
 #include "MFileMapping.h"
 #include "HkFunc.h"
+#include "MModule.h"
 
 #ifdef _DEBUG
 #include "CmdLine.h"
@@ -42,12 +42,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _DEBUG
 #define DEBUGSTRCMD(s) //OutputDebugString(s)
+//#define DEBUG_RETRY_PIPE_OPEN_DLG
 #else
 #define DEBUGSTRCMD(s)
+#undef DEBUG_RETRY_PIPE_OPEN_DLG
 #endif
 
 // !!! Использовать только через функцию: LocalSecurity() !!!
-SECURITY_ATTRIBUTES* gpLocalSecurity = NULL;
+SECURITY_ATTRIBUTES* gpLocalSecurity = nullptr;
 
 // Informational. Will be set in pHdr->hModule on calls
 HANDLE2 ghWorkingModule = {};
@@ -171,7 +173,7 @@ LPCWSTR ModuleName(LPCWSTR asDefault)
 
 	wchar_t szPath[MAX_PATH*2];
 
-	if (GetModuleFileNameW(NULL, szPath, countof(szPath)))
+	if (GetModuleFileNameW(nullptr, szPath, countof(szPath)))
 	{
 		wchar_t *pszSlash = wcsrchr(szPath, L'\\');
 
@@ -196,19 +198,19 @@ BOOL IsProcessDebugged(DWORD nPID)
 {
 	BOOL lbServerIsDebugged = FALSE;
 
-	// WinXP SP1 и выше
+	// WinXP SP1 and above
 	typedef BOOL (WINAPI* CheckRemoteDebuggerPresent_t)(HANDLE hProcess, PBOOL pbDebuggerPresent);
-	static CheckRemoteDebuggerPresent_t _CheckRemoteDebuggerPresent = NULL;
+	static CheckRemoteDebuggerPresent_t _CheckRemoteDebuggerPresent = nullptr;
 
 	if (!_CheckRemoteDebuggerPresent)
 	{
-		HMODULE hKernel = GetModuleHandle(L"kernel32.dll");
-		_CheckRemoteDebuggerPresent = hKernel ? (CheckRemoteDebuggerPresent_t)GetProcAddress(hKernel, "CheckRemoteDebuggerPresent") : NULL;
+		const MModule hKernel(GetModuleHandle(L"kernel32.dll"));
+		hKernel.GetProcAddress("CheckRemoteDebuggerPresent", _CheckRemoteDebuggerPresent);
 	}
 	
 	if (_CheckRemoteDebuggerPresent)
 	{
-		HANDLE hProcess = OpenProcess(MY_PROCESS_ALL_ACCESS, FALSE, nPID);
+		auto* const hProcess = OpenProcess(MY_PROCESS_ALL_ACCESS, FALSE, nPID);
 		if (hProcess)
 		{
 			BOOL lb = FALSE;
@@ -225,41 +227,42 @@ BOOL IsProcessDebugged(DWORD nPID)
 #endif
 
 // nTimeout - таймаут подключения
-HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], const wchar_t* szModule, DWORD nServerPID, DWORD nTimeout, BOOL Overlapped /*= FALSE*/, HANDLE hStop /*= NULL*/, BOOL bIgnoreAbsence /*= FALSE*/)
+HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], const wchar_t* szModule, DWORD nServerPID, DWORD nTimeout, BOOL Overlapped /*= FALSE*/, HANDLE hStop /*= nullptr*/, BOOL bIgnoreAbsence /*= FALSE*/)
 {
-	HANDLE hPipe = NULL;
+	HANDLE hPipe = nullptr;
 	DWORD dwErr = 0, dwMode = 0;
 	BOOL fSuccess = FALSE;
-	DWORD dwStartTick = GetTickCount();
-	DWORD nSleepError = 10;
+	const DWORD dwStartTick = GetTickCount();
+	const DWORD nSleepError = 10;
 	// допустимое количество обломов, отличных от ERROR_PIPE_BUSY. после каждого - Sleep(nSleepError);
 	// Увеличим допустимое количество попыток, иначе облом наступает раньше секунды ожидания
 	const int nDefaultTries = 100;
 	int nTries = nDefaultTries;
 	// nTimeout должен ограничивать ВЕРХНЮЮ границу времени ожидания
 	_ASSERTE(EXECUTE_CMD_OPENPIPE_TIMEOUT >= nTimeout);
-	DWORD nOpenPipeTimeout = nTimeout ? std::min<DWORD>(nTimeout, EXECUTE_CMD_OPENPIPE_TIMEOUT) : EXECUTE_CMD_OPENPIPE_TIMEOUT;
+	const DWORD nOpenPipeTimeout = nTimeout ? std::min<DWORD>(nTimeout, EXECUTE_CMD_OPENPIPE_TIMEOUT) : EXECUTE_CMD_OPENPIPE_TIMEOUT;
 	_ASSERTE(nOpenPipeTimeout > 0);
-	DWORD nWaitPipeTimeout = std::min<DWORD>(250, nOpenPipeTimeout);
+	const DWORD nWaitPipeTimeout = std::min<DWORD>(250, nOpenPipeTimeout);
 
 	BOOL bWaitPipeRc = FALSE, bWaitCalled = FALSE;
 	DWORD nWaitPipeErr = 0;
 	DWORD nDuration = 0;
-	DWORD nStopWaitRc = (DWORD)-1;
+	DWORD nStopWaitRc = static_cast<DWORD>(-1);
 
-	#ifdef _DEBUG
+	#ifdef DEBUG_RETRY_PIPE_OPEN_DLG
 	wchar_t szDbgMsg[512], szTitle[128];
 	#endif
 
-	// WinXP SP1 и выше
+	// WinXP SP1 and higher
+	// ReSharper disable once CppDeclaratorNeverUsed
 	DEBUGTEST(BOOL lbServerIsDebugged = nServerPID ? IsProcessDebugged(nServerPID) : FALSE);
 
 	
-	_ASSERTE(LocalSecurity()!=NULL);
+	_ASSERTE(LocalSecurity()!=nullptr);
 
 
 	// Try to open a named pipe; wait for it, if necessary.
-	while (1)
+	while (true)
 	{
 		hPipe = CreateFile(
 		            szPipeName,     // pipe name
@@ -268,26 +271,26 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 		            LocalSecurity(), // default security attributes
 		            OPEN_EXISTING,  // opens existing pipe
 		            (Overlapped ? FILE_FLAG_OVERLAPPED : 0), // default attributes
-		            NULL);          // no template file
+		            nullptr);          // no template file
 		dwErr = GetLastError();
 
 		// Break if the pipe handle is valid.
 		if (hPipe && (hPipe != INVALID_HANDLE_VALUE))
 		{
-			break; // OK, открыли
+			break; // OK, opened
 		}
 		_ASSERTE(hPipe);
 
-		#ifdef _DEBUG
+		#ifdef DEBUG_RETRY_PIPE_OPEN_DLG
 		if (gbPipeDebugBoxes)
 		{
 			szDbgMsg[0] = 0;
-			GetModuleFileName(NULL, szDbgMsg, countof(szDbgMsg));
+			GetModuleFileName(nullptr, szDbgMsg, countof(szDbgMsg));
 			msprintf(szTitle, countof(szTitle), L"%s: PID=%u", PointToName(szDbgMsg), GetCurrentProcessId());
 			msprintf(szDbgMsg, countof(szDbgMsg), L"Can't open pipe, ErrCode=%u\n%s\nWait: %u,%u,%u", dwErr, szPipeName, bWaitCalled, bWaitPipeRc, nWaitPipeErr);
-			int nBtn = ::MessageBox(NULL, szDbgMsg, szTitle, MB_SYSTEMMODAL|MB_RETRYCANCEL);
+			const int nBtn = MessageBoxW(nullptr, szDbgMsg, szTitle, MB_SYSTEMMODAL|MB_RETRYCANCEL);
 			if (nBtn == IDCANCEL)
-				return NULL;
+				return nullptr;
 		}
 		#endif
 
@@ -295,11 +298,11 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 
 		if (hStop)
 		{
-			// Затребовано завершение приложения или еще что-то
+			// Was requested application stop or so
 			nStopWaitRc = WaitForSingleObject(hStop, 0);
 			if (nStopWaitRc == WAIT_OBJECT_0)
 			{
-				return NULL;
+				return nullptr;
 			}
 		}
 
@@ -307,10 +310,13 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 		{
 			if ((nTries > 0) && (nDuration < nOpenPipeTimeout))
 			{
+				// ReSharper disable once CppAssignedValueIsNeverUsed
 				bWaitCalled = TRUE;
 
 				// All pipe instances are busy, so wait for a while (not more 500 ms).
+				// ReSharper disable once CppAssignedValueIsNeverUsed
 				bWaitPipeRc = WaitNamedPipe(szPipeName, nWaitPipeTimeout);
+				// ReSharper disable once CppAssignedValueIsNeverUsed
 				nWaitPipeErr = GetLastError();
 				UNREFERENCED_PARAMETER(bWaitPipeRc); UNREFERENCED_PARAMETER(nWaitPipeErr);
 				// -- 120602 раз они заняты (но живы), то будем ждать, пока не освободятся
@@ -326,13 +332,13 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 		// Сделаем так, чтобы хотя бы пару раз он попробовал повторить
 		if ((nTries <= 0) || (nDuration > nOpenPipeTimeout))
 		{
-			#ifdef _DEBUG
+			#ifdef DEBUG_RETRY_PIPE_OPEN_DLG
 			msprintf(szErr, countof(szErr), L"%s.%u\nCreateFile(%s) failed\ncode=%u%s%s",
 			          ModuleName(szModule), GetCurrentProcessId(), szPipeName, dwErr,
 			          (nTries <= 0) ? L", Tries" : L"", (nDuration > nOpenPipeTimeout) ? L", Duration" : L"");
 			//_ASSERTEX(FALSE && "Pipe open failed with timeout!");
-			int iBtn = bIgnoreAbsence ? IDCANCEL
-				: MessageBox(NULL, szErr, L"Pipe open failed with timeout!", MB_ICONSTOP|MB_SYSTEMMODAL|MB_RETRYCANCEL);
+			const int iBtn = bIgnoreAbsence ? IDCANCEL
+				: MessageBoxW(nullptr, szErr, L"Pipe open failed with timeout!", MB_ICONSTOP|MB_SYSTEMMODAL|MB_RETRYCANCEL);
 			if (iBtn == IDRETRY)
 			{
 				nTries = nDefaultTries;
@@ -340,7 +346,7 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 			}
 			#endif
 			SetLastError(dwErr);
-			return NULL;
+			return nullptr;
 		}
 		else
 		{
@@ -362,7 +368,7 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 		SetLastError(dwErr);
 
 		// Failed!
-		return NULL;
+		return nullptr;
 
 		// Уже сделано выше
 		//// All pipe instances are busy, so wait for 500 ms.
@@ -378,52 +384,24 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 		//		// не сразу срабатывает GUI и RCon еще не создал Pipe для HWND консоли
 		//		_ASSERTE(dwErr == 0);
 		//	}
-		//    return NULL;
+		//    return nullptr;
 		//}
 	}
 
 #ifdef _DEBUG
 	DWORD nCurState = 0, nCurInstances = 0;
-	BOOL bCurState = GetNamedPipeHandleState(hPipe, &nCurState, &nCurInstances, NULL, NULL, NULL, 0);
+	// ReSharper disable once CppDeclaratorNeverUsed
+	BOOL bCurState = GetNamedPipeHandleState(hPipe, &nCurState, &nCurInstances, nullptr, nullptr, nullptr, 0);
 #endif
 
 	// The pipe connected; change to message-read mode.
 	dwMode = CE_PIPE_READMODE;
+	// ReSharper disable once CppAssignedValueIsNeverUsed
 	fSuccess = SetNamedPipeHandleState(
 	               hPipe,    // pipe handle
 	               &dwMode,  // new pipe mode
-	               NULL,     // don't set maximum bytes
-	               NULL);    // don't set maximum time
-
-#if 0
-	if (!fSuccess)
-	{
-		dwErr = GetLastError();
-		_ASSERTE(fSuccess);
-		//if (pszErr)
-		{
-			msprintf(szErr, countof(szErr), L"%s.%u: SetNamedPipeHandleState(%s) failed, code=0x%08X",
-			          ModuleName(szModule), GetCurrentProcessId(), szPipeName, dwErr);
-			#ifdef _DEBUG
-			int nCurLen = lstrlen(szErr);
-			msprintf(szErr+nCurLen, countof(szErr)-nCurLen, L"\nCurState: %u,x%08X,%u", bCurState, nCurState, nCurInstances);
-			#endif
-		}
-		CloseHandle(hPipe);
-
-#ifdef _DEBUG
-		if (gbPipeDebugBoxes)
-		{
-			szDbgMsg[0] = 0;
-			GetModuleFileName(NULL, szDbgMsg, countof(szDbgMsg));
-			msprintf(szTitle, countof(szTitle), L"%s: PID=%u", PointToName(szDbgMsg), GetCurrentProcessId());
-			::MessageBox(NULL, szErr, szTitle, MB_SYSTEMMODAL);
-		}
-#endif
-
-		return NULL;
-	}
-#endif
+	               nullptr,     // don't set maximum bytes
+	               nullptr);    // don't set maximum time
 
 	UNREFERENCED_PARAMETER(bWaitCalled);
 	UNREFERENCED_PARAMETER(fSuccess);
@@ -439,9 +417,11 @@ void ExecutePrepareCmd(CESERVER_REQ* pIn, DWORD nCmd, size_t cbSize)
 
 	ExecutePrepareCmd(&(pIn->hdr), nCmd, cbSize);
 	
-	// Обнулить хвост с данными
+	// Reset data tail
 	if (cbSize > sizeof(pIn->hdr))
-		memset(((LPBYTE)&(pIn->hdr))+sizeof(pIn->hdr), 0, cbSize - sizeof(pIn->hdr));
+	{
+		memset(reinterpret_cast<LPBYTE>(&(pIn->hdr)) + sizeof(pIn->hdr), 0, cbSize - sizeof(pIn->hdr));
+	}
 }
 
 void ExecutePrepareCmd(CESERVER_REQ_HDR* pHdr, DWORD nCmd, size_t cbSize)
@@ -450,12 +430,12 @@ void ExecutePrepareCmd(CESERVER_REQ_HDR* pHdr, DWORD nCmd, size_t cbSize)
 		return;
 
 	pHdr->nCmd = nCmd;
-	pHdr->bAsync = FALSE; // сброс
+	pHdr->bAsync = FALSE; // reset
 	pHdr->nSrcThreadId = GetCurrentThreadId();
 	pHdr->nSrcPID = GetCurrentProcessId();
-	// Обмен данными идет и между 32bit & 64bit процессами, размеры __int64 недопустимы
-	_ASSERTE(cbSize == (DWORD)cbSize);
-	pHdr->cbSize = (DWORD)cbSize;
+	// We exchange data between 32bit and 64bit processes, 64-bit sizes are not allowed
+	_ASSERTE(cbSize == static_cast<DWORD>(cbSize));
+	pHdr->cbSize = static_cast<DWORD>(cbSize);
 	pHdr->nVersion = CESERVER_REQ_VER;
 	pHdr->nCreateTick = GetTickCount();
 	_ASSERTE(ghWorkingModule!=0);
@@ -468,14 +448,14 @@ void ExecutePrepareCmd(CESERVER_REQ_HDR* pHdr, DWORD nCmd, size_t cbSize)
 CESERVER_REQ* ExecuteNewCmd(DWORD nCmd, size_t nSize)
 {
 	_ASSERTE(nSize>=sizeof(CESERVER_REQ_HDR));
-	CESERVER_REQ* pIn = NULL;
+	CESERVER_REQ* pIn = nullptr;
 
 	if (nSize)
 	{
-		DWORD nErr = GetLastError();
+		const DWORD nErr = GetLastError();
 		
 		// Обязательно с обнулением выделяемой памяти
-		pIn = (CESERVER_REQ*)calloc(nSize, 1);
+		pIn = static_cast<CESERVER_REQ*>(calloc(nSize, 1));
 
 		if (pIn)
 		{
@@ -491,14 +471,14 @@ bool ExecuteNewCmd(CESERVER_REQ* &ppCmd, DWORD &pcbCurMaxSize, DWORD nCmd, size_
 {
 	if (!ppCmd || (pcbCurMaxSize < nSize))
 	{
-		DWORD nErr = GetLastError();
+		const DWORD nErr = GetLastError();
 		ExecuteFreeResult(ppCmd);
 		ppCmd = ExecuteNewCmd(nCmd, nSize);
-		if (ppCmd != NULL)
+		if (ppCmd != nullptr)
 		{
 			// Обмен данными идет и между 32bit & 64bit процессами, размеры __int64 недопустимы
-			_ASSERTE(nSize == (DWORD)nSize);
-			pcbCurMaxSize = (DWORD)nSize;
+			_ASSERTE(nSize == static_cast<DWORD>(nSize));
+			pcbCurMaxSize = static_cast<DWORD>(nSize);
 			ppCmd->hdr.nLastError = nErr;
 		}
 	}
@@ -507,26 +487,31 @@ bool ExecuteNewCmd(CESERVER_REQ* &ppCmd, DWORD &pcbCurMaxSize, DWORD nCmd, size_
 		ExecutePrepareCmd(ppCmd, nCmd, nSize);
 	}
 	
-	return (ppCmd != NULL);
+	return (ppCmd != nullptr);
 }
 
 // hConWnd - HWND _реальной_ консоли
+
+/// <summary>
+/// Loads CESERVER_CONSOLE_MAPPING_HDR data for specified hConWnd
+/// </summary>
+/// <param name="hConWnd">HWND of the <b>REAL</b> console</param>
+/// <param name="SrvMapping">CESERVER_CONSOLE_MAPPING_HDR& [OUT]</param>
+/// <returns>TRUE if mapping was successfully loaded</returns>
 BOOL LoadSrvMapping(HWND hConWnd, CESERVER_CONSOLE_MAPPING_HDR& SrvMapping)
 {
 	if (!hConWnd)
-		return FALSE;
+		return false;
 
 	MFileMapping<CESERVER_CONSOLE_MAPPING_HDR> SrvInfoMapping;
 	SrvInfoMapping.InitName(CECONMAPNAME, LODWORD(hConWnd));
 	const CESERVER_CONSOLE_MAPPING_HDR* pInfo = SrvInfoMapping.Open();
-	if (!pInfo)
-		return FALSE;
-	else if (pInfo->nProtocolVersion != CESERVER_REQ_VER)
-		return FALSE;
-	else
+	if (!pInfo || pInfo->nProtocolVersion != CESERVER_REQ_VER)
 	{
-		memmove(&SrvMapping, pInfo, std::min<size_t>(pInfo->cbSize, sizeof(SrvMapping)));
+		return false;
 	}
+
+	memmove(&SrvMapping, pInfo, std::min<size_t>(pInfo->cbSize, sizeof(SrvMapping)));
 	SrvInfoMapping.CloseMap();
 
 	return (SrvMapping.cbSize != 0);
@@ -540,14 +525,12 @@ BOOL LoadGuiMapping(DWORD nConEmuPID, ConEmuGuiMapping& GuiMapping)
 	MFileMapping<ConEmuGuiMapping> GuiInfoMapping;
 	GuiInfoMapping.InitName(CEGUIINFOMAPNAME, nConEmuPID);
 	const ConEmuGuiMapping* pInfo = GuiInfoMapping.Open();
-	if (!pInfo)
-		return FALSE;
-	else if (pInfo->nProtocolVersion != CESERVER_REQ_VER)
-		return FALSE;
-	else
+	if (!pInfo || pInfo->nProtocolVersion != CESERVER_REQ_VER)
 	{
-		memmove(&GuiMapping, pInfo, std::min<size_t>(pInfo->cbSize, sizeof(GuiMapping)));
+		return false;
 	}
+
+	memmove(&GuiMapping, pInfo, std::min<size_t>(pInfo->cbSize, sizeof(GuiMapping)));
 	GuiInfoMapping.CloseMap();
 
 	return (GuiMapping.cbSize != 0);
@@ -597,11 +580,11 @@ CESERVER_REQ* ExecuteNewCmdOnCreate(CESERVER_CONSOLE_MAPPING_HDR* pSrvMap, HWND 
 	// Was logging requested?
 	if (!bEnabled)
 	{
-		return NULL;
+		return nullptr;
 	}
 
 	
-	CESERVER_REQ *pIn = NULL;
+	CESERVER_REQ *pIn = nullptr;
 	
 	int nActionLen = (asAction ? lstrlen(asAction) : 0)+1;
 	int nFileLen = (asFile ? lstrlen(asFile) : 0)+1;
@@ -678,7 +661,7 @@ CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, CESERVER_REQ* pIn, HWND hOwner, BOOL b
 	wchar_t szGuiPipeName[128];
 
 	if (!hConWnd)
-		return NULL;
+		return nullptr;
 
 	DWORD nLastErr = GetLastError();
 	//swprintf_c(szGuiPipeName, CEGUIPIPENAME, L".", (DWORD)hConWnd);
@@ -713,16 +696,16 @@ CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, CESERVER_REQ* pIn, HWND hOwner, BOOL b
 	return lpRet;
 }
 
-CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, DWORD nCmd, size_t cbDataSize, LPBYTE data, HWND hOwner, BOOL bAsyncNoResult /*= FALSE*/)
+CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, DWORD nCmd, size_t cbDataSize, const BYTE* data, HWND hOwner, BOOL bAsyncNoResult /*= FALSE*/)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 	CESERVER_REQ* pIn = ExecuteNewCmd(nCmd, sizeof(CESERVER_REQ_HDR)+cbDataSize);
 
 	if (pIn)
 	{
 		if (cbDataSize)
 		{
-			_ASSERTEX(data != NULL);
+			_ASSERTEX(data != nullptr);
 			memmove(pIn->Data, data, cbDataSize);
 		}
 
@@ -740,7 +723,7 @@ CESERVER_REQ* ExecuteSrvCmd(DWORD dwSrvPID, CESERVER_REQ* pIn, HWND hOwner, BOOL
 	wchar_t szPipeName[128];
 
 	if (!dwSrvPID)
-		return NULL;
+		return nullptr;
 
 	DWORD nLastErr = GetLastError();
 	//swprintf_c(szPipeName, CESERVERPIPENAME, L".", (DWORD)dwSrvPID);
@@ -752,9 +735,9 @@ CESERVER_REQ* ExecuteSrvCmd(DWORD dwSrvPID, CESERVER_REQ* pIn, HWND hOwner, BOOL
 }
 
 // Выполнить в ConEmuC
-CESERVER_REQ* ExecuteSrvCmd(DWORD dwSrvPID, DWORD nCmd, size_t cbDataSize, LPBYTE data, HWND hOwner, BOOL bAsyncNoResult /*= FALSE*/)
+CESERVER_REQ* ExecuteSrvCmd(DWORD dwSrvPID, DWORD nCmd, size_t cbDataSize, const BYTE* data, HWND hOwner, BOOL bAsyncNoResult /*= FALSE*/)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	if (CESERVER_REQ* pIn = ExecuteNewCmd(nCmd, sizeof(CESERVER_REQ_HDR)+cbDataSize))
 	{
@@ -775,7 +758,7 @@ CESERVER_REQ* ExecuteHkCmd(DWORD dwHkPID, CESERVER_REQ* pIn, HWND hOwner, BOOL b
 	wchar_t szPipeName[128];
 
 	if (!dwHkPID)
-		return NULL;
+		return nullptr;
 
 	DWORD nLastErr = GetLastError();
 	//swprintf_c(szPipeName, CESERVERPIPENAME, L".", (DWORD)dwSrvPID);
@@ -794,10 +777,10 @@ CESERVER_REQ* ExecuteHkCmd(DWORD dwHkPID, CESERVER_REQ* pIn, HWND hOwner, BOOL b
 //WARNING!!!
 //   Эта процедура не может получить с сервера более 600 байт данных!
 // В заголовке hOwner в дебаге может быть отображена ошибка
-CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWaitPipe, HWND hOwner, BOOL bAsyncNoResult, DWORD nServerPID, BOOL bIgnoreAbsence /*= FALSE*/)
+CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, CESERVER_REQ* pIn, DWORD nWaitPipe, HWND hOwner, BOOL bAsyncNoResult, DWORD nServerPID, BOOL bIgnoreAbsence /*= FALSE*/)
 {
-	CESERVER_REQ* pOut = NULL;
-	HANDLE hPipe = NULL;
+	CESERVER_REQ* pOut = nullptr;
+	HANDLE hPipe = nullptr;
 	BYTE cbReadBuf[600]; // чтобы CESERVER_REQ_OUTPUTFILE поместился
 	wchar_t szErr[MAX_PATH*2]; szErr[0] = 0;
 	BOOL fSuccess = FALSE;
@@ -806,36 +789,37 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 	LPBYTE ptrData;
 	#ifdef _DEBUG
 	bool bIsAltSrvCmd;
-	wchar_t szDbgPrefix[64], szDbgResult[64], *pszDbgMsg = NULL;
+	wchar_t szDbgPrefix[64], szDbgResult[64];
+	CEStr pszDbgMsg;
 	#endif
 
-	if (!pIn || !szPipeName)
+	if (!pIn || !szGuiPipeName)
 	{
-		_ASSERTE(pIn && szPipeName);
-		pOut = NULL;
+		_ASSERTE(pIn && szGuiPipeName);
+		pOut = nullptr;
 		goto wrap;
 	}
 
 	#ifdef _DEBUG
 	swprintf_c(szDbgPrefix, L">> ExecCmd: PID=%5u  TID=%5u  Cmd=%3u  ", GetCurrentProcessId(), GetCurrentThreadId(), pIn->hdr.nCmd);
-	pszDbgMsg = lstrmerge(szDbgPrefix, szPipeName, L"\n");
-	if (pszDbgMsg) { DEBUGSTRCMD(pszDbgMsg); free(pszDbgMsg); }
+	pszDbgMsg = CEStr(szDbgPrefix, szGuiPipeName, L"\n");
+	if (pszDbgMsg) { DEBUGSTRCMD(pszDbgMsg); pszDbgMsg.Release(); }
 	#endif
 
 	pIn->hdr.bAsync = bAsyncNoResult;
 
 	_ASSERTE(pIn->hdr.nSrcPID && pIn->hdr.nSrcThreadId);
 	_ASSERTE(pIn->hdr.cbSize >= sizeof(pIn->hdr));
-	hPipe = ExecuteOpenPipe(szPipeName, szErr, NULL/*Сюда хорошо бы имя модуля подкрутить*/, nServerPID, nWaitPipe, FALSE, NULL, bIgnoreAbsence);
+	hPipe = ExecuteOpenPipe(szGuiPipeName, szErr, nullptr/*Сюда хорошо бы имя модуля подкрутить*/, nServerPID, nWaitPipe, FALSE, nullptr, bIgnoreAbsence);
 
-	if (hPipe == NULL || hPipe == INVALID_HANDLE_VALUE)
+	if (hPipe == nullptr || hPipe == INVALID_HANDLE_VALUE)
 	{
 		#ifdef _DEBUG
 		dwErr = GetLastError();
 
 		// в заголовке "чисто" запущенного фара появляются отладочные(?) сообщения
 		// по идее - не должны, т.к. все должно быть через мэппинг
-		// *** _ASSERTEX(hPipe != NULL && hPipe != INVALID_HANDLE_VALUE); - no need in assert, it was already shown
+		// *** _ASSERTEX(hPipe != nullptr && hPipe != INVALID_HANDLE_VALUE); - no need in assert, it was already shown
 		#ifdef CONEMU_MINIMAL
 		SetConsoleTitle(szErr);
 		#else
@@ -852,7 +836,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 
 		#endif
 
-		pOut = NULL;
+		pOut = nullptr;
 		goto wrap;
 	}
 
@@ -868,7 +852,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 	if (bAsyncNoResult)
 	{
 		// Если нас не интересует возврат и нужно сразу вернуться
-		fSuccess = WriteFile(hPipe, pIn, pIn->hdr.cbSize, &cbRead, NULL);
+		fSuccess = WriteFile(hPipe, pIn, pIn->hdr.cbSize, &cbRead, nullptr);
 		#ifdef _DEBUG
 		dwErr = GetLastError();
 		_ASSERTE(fSuccess && (cbRead == pIn->hdr.cbSize));
@@ -880,7 +864,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 		// -- Must be refactored, but not so critical...
 		// -- CloseHandle(hPipe);
 
-		pOut = NULL;
+		pOut = nullptr;
 		goto wrap;
 	}
 	else
@@ -895,7 +879,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 					   cbReadBuf,              // buffer to receive reply
 					   sizeof(cbReadBuf),      // size of read buffer
 					   &cbRead,                // bytes read
-					   NULL);                  // not overlapped
+					   nullptr);                  // not overlapped
 		dwErr = GetLastError();
 		//CloseHandle(hPipe);
 
@@ -904,7 +888,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 			//_ASSERTE(fSuccess || (dwErr == ERROR_MORE_DATA));
 			CloseHandle(hPipe);
 
-			pOut = NULL;
+			pOut = nullptr;
 			goto wrap;
 		}
 	}
@@ -913,7 +897,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 	{
 		CloseHandle(hPipe);
 
-		pOut = NULL;
+		pOut = nullptr;
 		goto wrap;
 	}
 
@@ -928,7 +912,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 			DEBUGSTR(L"!!! Wrong nSize received from GUI server !!!\n");
 		}
 
-		pOut = NULL;
+		pOut = nullptr;
 		goto wrap;
 	}
 
@@ -937,7 +921,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 		CloseHandle(hPipe);
 		DEBUGSTR(L"!!! Wrong nVersion received from GUI server !!!\n");
 
-		pOut = NULL;
+		pOut = nullptr;
 		goto wrap;
 	}
 
@@ -949,12 +933,12 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 	{
 		CloseHandle(hPipe);
 
-		_ASSERTE(pOut == NULL);
+		_ASSERTE(pOut == nullptr);
 		goto wrap;
 	}
 
 	memmove(pOut, cbReadBuf, cbRead);
-	ptrData = ((LPBYTE)pOut)+cbRead;
+	ptrData = reinterpret_cast<LPBYTE>(pOut) + cbRead;
 	nAllSize -= cbRead;
 
 	while (nAllSize>0)
@@ -969,7 +953,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 		               ptrData,    // buffer to receive reply
 		               nAllSize,   // size of buffer
 		               &cbRead,    // number of bytes read
-		               NULL);      // not overlapped
+		               nullptr);      // not overlapped
 
 		// Exit if an error other than ERROR_MORE_DATA occurs.
 		if (!fSuccess && ((dwErr = GetLastError()) != ERROR_MORE_DATA))
@@ -986,7 +970,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWa
 		if (pOut->hdr.nCmd == 0)
 		{
 			ExecuteFreeResult(pOut);
-			pOut = NULL;
+			pOut = nullptr;
 		}
 	}
 
@@ -996,8 +980,8 @@ wrap:
 		swprintf_c(szDbgResult, L"- Data=%5u  Err=%u\n", pOut->DataSize(), dwErr);
 	else
 		lstrcpyn(szDbgResult, L"[NULL]\n", countof(szDbgResult));
-	pszDbgMsg = lstrmerge(szDbgPrefix, szDbgResult);
-	if (pszDbgMsg) { DEBUGSTRCMD(pszDbgMsg); free(pszDbgMsg); }
+	pszDbgMsg = CEStr(szDbgPrefix, szDbgResult);
+	if (pszDbgMsg) { DEBUGSTRCMD(pszDbgMsg); pszDbgMsg.Release(); }
 	#endif
 
 	return pOut;
@@ -1008,11 +992,143 @@ void ExecuteFreeResult(CESERVER_REQ* &pOut)
 	if (!pOut) return;
 
 	CESERVER_REQ* p = pOut;
-	pOut = NULL;
+	pOut = nullptr;
 	free(p);
 }
 
-bool AllocateSendCurrentDirectory(CESERVER_REQ* &ppCmd, DWORD &pcbCurMaxSize, LPCWSTR asDirectory, LPCWSTR asPassiveDirectory /*= NULL*/)
+ConEmuRpc::ConEmuRpc()
+{
+	nPreLastError = GetLastError();
+	szPipeName[0] = 0;
+	szError[0] = 0;
+}
+
+ConEmuRpc::~ConEmuRpc()
+{
+	// Don't harm active process with possible pipe errors
+	SetLastError(nPreLastError);
+}
+
+ConEmuRpc& ConEmuRpc::SetStopHandle(HANDLE ahStop)
+{
+	this->hStop = ahStop;
+	return *this;
+}
+
+ConEmuRpc& ConEmuRpc::SetOwner(HWND ahOwner)
+{
+	this->hOwner = ahOwner;
+	return *this;
+}
+
+ConEmuRpc& ConEmuRpc::SetModuleName(const wchar_t* asModule)
+{
+	this->szModule = asModule;
+	return *this;
+}
+
+ConEmuRpc& ConEmuRpc::SetAsyncNoResult(const bool abAsyncNoResult)
+{
+	this->bAsyncNoResult = abAsyncNoResult;
+	return *this;
+}
+
+ConEmuRpc& ConEmuRpc::SetOverlapped(const bool abOverlapped)
+{
+	this->bOverlapped = abOverlapped;
+	return *this;
+}
+
+ConEmuRpc& ConEmuRpc::SetIgnoreAbsence(const bool abIgnoreAbsence)
+{
+	this->bIgnoreAbsence = abIgnoreAbsence;
+	return *this;
+}
+
+ConEmuRpc& ConEmuRpc::SetTimeout(const DWORD anTimeoutMs)
+{
+	this->nTimeoutMs = anTimeoutMs;
+	return *this;
+}
+
+CESERVER_REQ* ConEmuRpc::Execute(CESERVER_REQ* pIn) const
+{
+	if (szPipeName[0] == L'\0')
+	{
+		_ASSERTE(szPipeName[0] != L'\0');
+		return nullptr;
+	}
+	if (!pIn)
+	{
+		_ASSERTE(pIn != nullptr);
+		return nullptr;
+	}
+	
+	#ifdef _DEBUG
+	const DWORD nStartTick = GetTickCount();
+	#endif
+
+	CESERVER_REQ* lpRet = ExecuteCmd(szPipeName, pIn, nTimeoutMs, hOwner, bAsyncNoResult, nServerPID, bIgnoreAbsence);
+
+	#ifdef _DEBUG
+	const DWORD nEndTick = GetTickCount();
+	const DWORD nDelta = nEndTick - nStartTick;
+	const DWORD nWarnExecutionTime = (pIn->hdr.nCmd == CECMD_CMDSTARTSTOP) ? EXECUTE_CMD_WARN_TIMEOUT2 : EXECUTE_CMD_WARN_TIMEOUT;
+	if (nDelta >= EXECUTE_CMD_WARN_TIMEOUT)
+	{
+		if (!IsDebuggerPresent())
+		{
+			if (lpRet)
+			{
+				_ASSERTE(nDelta <= nWarnExecutionTime || lpRet->hdr.IsDebugging);
+			}
+			else
+			{
+				_ASSERTE(nDelta <= EXECUTE_CMD_TIMEOUT_SRV_ABSENT || bIgnoreAbsence);
+			}
+		}
+	}
+	#endif
+
+	return lpRet;
+}
+
+CESERVER_REQ* ConEmuRpc::Execute(const CECMD nCmd, const void* const data, const size_t cbDataSize) const
+{
+	CESERVER_REQ* pOut = nullptr;
+	CESERVER_REQ* pIn = ExecuteNewCmd(nCmd, sizeof(CESERVER_REQ_HDR) + cbDataSize);
+
+	if (pIn)
+	{
+		if (cbDataSize)
+		{
+			_ASSERTEX(data != nullptr);
+			memmove_s(pIn->Data, cbDataSize, data, cbDataSize);
+		}
+
+		pOut = this->Execute(pIn);
+
+		ExecuteFreeResult(pIn);
+	}
+
+	return pOut;
+}
+
+LPCWSTR ConEmuRpc::GetErrorText() const
+{
+	return this->szError;
+}
+
+ConEmuGuiRpc::ConEmuGuiRpc(HWND ahConWnd)
+	: ConEmuRpc(), hConWnd(ahConWnd)
+{
+	msprintf(szPipeName, countof(szPipeName), CEGUIPIPENAME, L".", LODWORD(hConWnd));
+}
+
+ConEmuGuiRpc::~ConEmuGuiRpc()
+= default;
+
+bool AllocateSendCurrentDirectory(CESERVER_REQ* &ppCmd, DWORD &pcbCurMaxSize, LPCWSTR asDirectory, LPCWSTR asPassiveDirectory /*= nullptr*/)
 {
 	int iALen = asDirectory ? (lstrlen(asDirectory)+1) : 0;
 	int iPLen = asPassiveDirectory ? (lstrlen(asPassiveDirectory)+1) : 0;
@@ -1039,9 +1155,9 @@ bool AllocateSendCurrentDirectory(CESERVER_REQ* &ppCmd, DWORD &pcbCurMaxSize, LP
 	return true;
 }
 
-void SendCurrentDirectory(HWND hConWnd, LPCWSTR asDirectory, LPCWSTR asPassiveDirectory /*= NULL*/)
+void SendCurrentDirectory(HWND hConWnd, LPCWSTR asDirectory, LPCWSTR asPassiveDirectory /*= nullptr*/)
 {
-	CESERVER_REQ* pIn = NULL; DWORD cbSize = 0;
+	CESERVER_REQ* pIn = nullptr; DWORD cbSize = 0;
 	if (!AllocateSendCurrentDirectory(pIn, cbSize, asDirectory, asPassiveDirectory))
 		return;
 
@@ -1050,9 +1166,9 @@ void SendCurrentDirectory(HWND hConWnd, LPCWSTR asDirectory, LPCWSTR asPassiveDi
 	ExecuteFreeResult(pIn);
 }
 
-bool isConsoleClass(LPCWSTR asClass)
+bool IsConsoleClass(LPCWSTR asClass)
 {
-	if ((asClass && *asClass)
+	if (IsStrNotEmpty(asClass)
 		&& (
 			(lstrcmp(asClass, RealConsoleClass) == 0)
 			|| (lstrcmp(asClass, WineConsoleClass) == 0)
@@ -1062,7 +1178,7 @@ bool isConsoleClass(LPCWSTR asClass)
 	return false;
 }
 
-bool isConsoleWindow(HWND hWnd)
+bool IsConsoleWindow(HWND hWnd)
 {
 	wchar_t szClass[64] = L"";
 
@@ -1070,7 +1186,7 @@ bool isConsoleWindow(HWND hWnd)
 		return false;
 	if (!GetClassName(hWnd, szClass, countof(szClass)))
 		return false;
-	if (!isConsoleClass(szClass))
+	if (!IsConsoleClass(szClass))
 		return false;
 
 	// But when process is hooked, GetConsoleClass will return "proper" name
@@ -1083,7 +1199,7 @@ bool isConsoleWindow(HWND hWnd)
 	{
 		if (GetClassName(h, szClassPtr, countof(szClassPtr)))
 		{
-			if (isConsoleClass(szClassPtr))
+			if (IsConsoleClass(szClassPtr))
 			{
 				_ASSERTE(FALSE && "RealConsole handle was not retrieved properly!");
 				return false;
@@ -1095,18 +1211,30 @@ bool isConsoleWindow(HWND hWnd)
 	return true;
 }
 
-GetConsoleWindow_T gfGetRealConsoleWindow = NULL;
+bool IsPseudoConsoleWindow(HWND hWnd)
+{
+	wchar_t szClass[64] = L"";
+
+	if (!hWnd)
+		return false;
+	if (!GetClassName(hWnd, szClass, countof(szClass)))
+		return false;
+	const int cmp = lstrcmp(szClass, PseudoConsoleClass);
+	return (cmp == 0);
+}
+
+GetConsoleWindow_T gfGetRealConsoleWindow = nullptr;
 
 HWND myGetConsoleWindow()
 {
-	HWND hConWnd = NULL;
+	HWND hConWnd = nullptr;
 
 	// If we are in ConEmuHk than gfGetRealConsoleWindow may be set
 	if (gfGetRealConsoleWindow)
 	{
 		hConWnd = gfGetRealConsoleWindow();
 		// If the function pointer was set - it must be proper function
-		_ASSERTEX(hConWnd==NULL || isConsoleWindow(hConWnd));
+		_ASSERTEX(hConWnd==nullptr || IsConsoleWindow(hConWnd));
 		return hConWnd;
 	}
 
@@ -1124,7 +1252,7 @@ HWND myGetConsoleWindow()
 		hConWnd = GetConsoleWindow();
 		// Current process may be GUI and have no console at all
 		if (!hConWnd)
-			return NULL;
+			return nullptr;
 
 		// RealConsole handle is stored in the Window DATA
 		if (!hkFunc.isConEmuHk())
@@ -1135,9 +1263,17 @@ HWND myGetConsoleWindow()
 
 			// Regardless of GetClassName result, it may be VirtualConsoleClass
 			HWND h = (HWND)GetWindowLongPtr(hConWnd, WindowLongDCWnd_ConWnd);
-			if (h && IsWindow(h) && isConsoleWindow(h))
+			if (h && IsWindow(h) && IsConsoleWindow(h))
 			{
 				hConWnd = h;
+			}
+			else if (IsPseudoConsoleWindow(hConWnd))
+			{
+				const auto wndFromEnv = GetConEmuWindowsFromEnv();
+				if (wndFromEnv.RealConWnd && IsConsoleWindow(wndFromEnv.RealConWnd))
+				{
+					hConWnd = wndFromEnv.RealConWnd;
+				}
 			}
 		}
 	}
@@ -1147,7 +1283,7 @@ HWND myGetConsoleWindow()
 #if 0
 	// Смысла звать GetProcAddress для "GetConsoleWindow" мало, все равно хукается
 	typedef HWND (APIENTRY *FGetConsoleWindow)();
-	static FGetConsoleWindow fGetConsoleWindow = NULL;
+	static FGetConsoleWindow fGetConsoleWindow = nullptr;
 
 	if (!fGetConsoleWindow)
 	{
@@ -1166,121 +1302,103 @@ HWND myGetConsoleWindow()
 #endif
 }
 
-// Returns HWND of ...
-//  aiType==0: Gui console DC window
-//        ==1: Gui Main window
-//        ==2: Console window
-//        ==3: Back window
-HWND GetConEmuHWND(int aiType)
+ConEmuWindows GetConEmuWindows(HWND realConsole)
 {
-	//CESERVER_REQ *pIn = NULL;
-	//CESERVER_REQ *pOut = NULL;
-	DWORD nLastErr = GetLastError();
-	HWND FarHwnd = NULL, ConEmuHwnd = NULL, ConEmuRoot = NULL, ConEmuBack = NULL;
-	size_t cchMax = 128;
-	wchar_t *szGuiPipeName = NULL;
+	ConEmuWindows result{};
+	CESERVER_CONSOLE_MAPPING_HDR* p = nullptr;
+	const size_t cchMax = 128;
+	wchar_t guiMappingName[cchMax] = L"";
 
-	FarHwnd = myGetConsoleWindow();
-	if (!FarHwnd || (aiType == 2))
+	msprintf(guiMappingName, cchMax, CECONMAPNAME, LODWORD(realConsole));
+#ifdef _DEBUG
+	size_t nSize = sizeof(*p);
+#endif
+	auto* hMapping = OpenFileMapping(FILE_MAP_READ, FALSE, guiMappingName);
+	if (hMapping)
+	{
+		const DWORD nFlags = FILE_MAP_READ;
+		p = static_cast<CESERVER_CONSOLE_MAPPING_HDR*>(MapViewOfFile(hMapping, nFlags, 0, 0, 0));
+	}
+
+	if (p && p->hConEmuRoot && IsWindow(p->hConEmuRoot))
+	{
+		// Успешно
+		result.ConEmuRoot = p->hConEmuRoot;
+		result.ConEmuHwnd = p->hConEmuWndDc;
+		result.ConEmuBack = p->hConEmuWndBack;
+		result.RealConWnd = realConsole;
+	}
+
+	if (p)
+		UnmapViewOfFile(p);
+	if (hMapping)
+		CloseHandle(hMapping);
+
+	return result;
+}
+
+ConEmuWindows GetConEmuWindowsFromEnv()
+{
+	ConEmuWindows result{};
+	const DWORD envCchMax = 32;
+	wchar_t guiPidStr[envCchMax] = L"", srvPidStr[envCchMax] = L"";
+	if (GetEnvironmentVariableW(ENV_CONEMUPID_VAR_W, guiPidStr, envCchMax)
+		&& GetEnvironmentVariableW(ENV_CONEMUSERVERPID_VAR_W, srvPidStr, envCchMax)
+		&& IsStrNotEmpty(guiPidStr) && IsStrNotEmpty(srvPidStr))
+	{
+		const DWORD guiPID = wcstoul(guiPidStr, nullptr, 10);
+		const DWORD srvPID = wcstoul(srvPidStr, nullptr, 10);
+
+		if (!result.ConEmuHwnd)
+		{
+			ConEmuGuiMapping guiMapping{};
+			guiMapping.cbSize = sizeof(guiMapping);
+			if (guiPID && LoadGuiMapping(guiPID, guiMapping))
+			{
+				for (const auto& console : guiMapping.Consoles)
+				{
+					if (console.ServerPID == srvPID)
+					{
+						result.RealConWnd = console.Console;
+						result.ConEmuHwnd = console.DCWindow;
+						result.ConEmuRoot = guiMapping.hGuiWnd;
+						break;
+					}
+				}
+			}
+		}
+	}
+	return result;
+}
+
+HWND GetConEmuHWND(const ConEmuWndType aiType)
+{
+	const DWORD nLastErr = GetLastError();
+	HWND realConsoleWnd = nullptr;
+	ConEmuWindows result{};
+
+	realConsoleWnd = myGetConsoleWindow();
+	if (!realConsoleWnd || (aiType == ConEmuWndType::ConsoleWindow))
 	{
 		goto wrap;
-		//SetLastError(nLastErr);
-		//return NULL;
 	}
 
-	szGuiPipeName = (wchar_t*)malloc(cchMax*sizeof(*szGuiPipeName));
-	if (!szGuiPipeName)
-	{
-		_ASSERTE(szGuiPipeName!=NULL);
-		return NULL;
-	}
-
-	// Сначала пробуем Mapping консоли (вдруг есть?)
-	if (!ConEmuRoot)
-	{
-		// создание этого объекта не позволяет отказаться от CRT (создается __chkstk)
-		//MFileMapping<CESERVER_CONSOLE_MAPPING_HDR> ConMap;
-		//ConMap.InitName(CECONMAPNAME, (DWORD)FarHwnd); 
-		//CESERVER_CONSOLE_MAPPING_HDR* p = ConMap.Open();
-
-		CESERVER_CONSOLE_MAPPING_HDR* p = NULL;
-
-		msprintf(szGuiPipeName, cchMax, CECONMAPNAME, LODWORD(FarHwnd));
-		#ifdef _DEBUG
-		size_t nSize = sizeof(*p);
-		#endif
-		HANDLE hMapping = OpenFileMapping(FILE_MAP_READ, FALSE, szGuiPipeName);
-		if (hMapping)
-		{
-			DWORD nFlags = FILE_MAP_READ;
-			p = (CESERVER_CONSOLE_MAPPING_HDR*)MapViewOfFile(hMapping, nFlags,0,0,0);
-		}
-
-		if (p && p->hConEmuRoot && IsWindow(p->hConEmuRoot))
-		{
-			// Успешно
-			ConEmuRoot = p->hConEmuRoot;
-			ConEmuHwnd = p->hConEmuWndDc;
-			ConEmuBack = p->hConEmuWndBack;
-		}
-
-		if (p)
-			UnmapViewOfFile(p);
-		if (hMapping)
-			CloseHandle(hMapping);
-	}
-
-#if 0
-	// Сервер не мог подцепиться БЕЗ создания мэппинга, поэтому CECMD_GETGUIHWND можно не делать
-	if (!ConEmuRoot)
-	{
-		//BOOL lbRc = FALSE;
-		pIn = (CESERVER_REQ*)calloc(1,sizeof(CESERVER_REQ));
-
-		ExecutePrepareCmd(pIn, CECMD_GETGUIHWND, sizeof(CESERVER_REQ_HDR));
-		//swprintf_c(szGuiPipeName, CEGUIPIPENAME, L".", (DWORD)FarHwnd);
-		msprintf(szGuiPipeName, cchMax, CEGUIPIPENAME, L".", (DWORD)FarHwnd);
-		// Таймаут уменьшим, т.к. на результат не надеемся
-		pOut = ExecuteCmd(szGuiPipeName, pIn, 250, FarHwnd);
-
-		if (!pOut)
-		{
-			goto wrap;
-		}
-
-		if (pOut->hdr.cbSize != (sizeof(CESERVER_REQ_HDR)+2*sizeof(DWORD)) || pOut->hdr.nCmd != pIn->hdr.nCmd)
-		{
-			ExecuteFreeResult(pOut);
-			pOut = NULL;
-			goto wrap;
-		}
-
-		ConEmuRoot = (HWND)pOut->dwData[0];
-		ConEmuHwnd = (HWND)pOut->dwData[1];
-		// Сервер не мог подцепиться БЕЗ создания мэппинга, поэтому CECMD_GETGUIHWND не должен был пройти успешно
-		_ASSERTE(ConEmuRoot == NULL);
-		ExecuteFreeResult(pOut);
-		pOut = NULL;
-	}
-#endif
+	result = GetConEmuWindows(realConsoleWnd);
 
 wrap:
 	SetLastError(nLastErr);
-	//if (pIn)
-	//	free(pIn);
-	if (szGuiPipeName)
-		free(szGuiPipeName);
 
 	switch (aiType)
 	{
-	case 3:
-		return ConEmuBack;
-	case 2:
-		return FarHwnd;
-	case 0:
-		return ConEmuHwnd;
-	default: // aiType == 1
-		return ConEmuRoot;
+	case ConEmuWndType::GuiBackWindow:
+		return result.ConEmuBack;
+	case ConEmuWndType::ConsoleWindow:
+		return realConsoleWnd;
+	case ConEmuWndType::GuiDcWindow:
+		return result.ConEmuHwnd;
+	case ConEmuWndType::GuiMainWindow:
+	default:
+		return result.ConEmuRoot;
 	}
 }
 
@@ -1291,13 +1409,13 @@ wrap:
 int ConEmuCheck(HWND* ahConEmuWnd)
 {
 	//int nChk = -1;
-	HWND ConEmuWnd = NULL;
-	ConEmuWnd = GetConEmuHWND(FALSE/*abRoot*/  /*, &nChk*/);
+	HWND ConEmuWnd = nullptr;
+	ConEmuWnd = GetConEmuHWND(ConEmuWndType::GuiDcWindow);
 
 	// Если хотели узнать хэндл - возвращаем его
 	if (ahConEmuWnd) *ahConEmuWnd = ConEmuWnd;
 
-	if (ConEmuWnd == NULL)
+	if (ConEmuWnd == nullptr)
 	{
 		return 1; // NO ConEmu (simple console mode)
 	}
@@ -1355,8 +1473,8 @@ int GuiMessageBox(HWND hConEmuWndRoot, LPCWSTR asText, LPCWSTR asTitle, int anBt
 	}
 	else
 	{
-		//_ASSERTE(hConEmuWndRoot!=NULL);
-		nResult = MessageBoxW(NULL, asText, asTitle, MB_SYSTEMMODAL|anBtns);
+		//_ASSERTE(hConEmuWndRoot!=nullptr);
+		nResult = MessageBoxW(nullptr, asText, asTitle, MB_SYSTEMMODAL|anBtns);
 	}
 
 	return nResult;

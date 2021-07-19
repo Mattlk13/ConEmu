@@ -34,10 +34,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //#define ALLOWUSEFARSYNCHRO
 
 #include "Header.h"
-#include <Tlhelp32.h>
+#include <tlhelp32.h>
 #include "../common/ConEmuCheck.h"
-#include "../common/RgnDetect.h"
-#include "../common/Execute.h"
+#include "../common/execute.h"
 #include "../common/PipeServer.h"
 #include "../common/WConsole.h"
 #include "../common/WUser.h"
@@ -47,11 +46,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "VirtualConsole.h"
 #include "TabBar.h"
 #include "ConEmu.h"
-#include "ConEmuApp.h"
 #include "SetPgDebug.h"
 #include "VConChild.h"
 #include "VConGroup.h"
-#include "ConEmuPipe.h"
+#include "GlobalHotkeys.h"
 #include "Macro.h"
 #include "OptionsClass.h"
 
@@ -61,9 +59,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 CRealServer::CRealServer()
 {
-	mp_RCon = NULL;
-	mh_GuiAttached = NULL;
-	mp_RConServer = NULL;
+	mp_RCon = nullptr;
+	mh_GuiAttached = nullptr;
+	mp_RConServer = nullptr;
 	mb_RealForcedTermination = false;
 }
 
@@ -77,9 +75,9 @@ void CRealServer::Init(CRealConsole* apRCon)
 	mp_RCon = apRCon;
 	mp_RConServer = (PipeServer<CESERVER_REQ>*)calloc(3,sizeof(*mp_RConServer));
 	mp_RConServer->SetMaxCount(3);
-	//mh_ServerSemaphore = NULL;
+	//mh_ServerSemaphore = nullptr;
 	//memset(mh_RConServerThreads, 0, sizeof(mh_RConServerThreads));
-	//mh_ActiveRConServerThread = NULL;
+	//mh_ActiveRConServerThread = nullptr;
 	//memset(mn_RConServerThreadsId, 0, sizeof(mn_RConServerThreadsId));
 }
 
@@ -98,7 +96,7 @@ bool CRealServer::Start()
 		//// Вроде, когда используется run as administrator - event открыть не получается?
 		//if (!mh_GuiAttached) {
 		mh_GuiAttached = CreateEvent(gpLocalSecurity, TRUE, FALSE, szEvent);
-		_ASSERTE(mh_GuiAttached!=NULL);
+		_ASSERTE(mh_GuiAttached!=nullptr);
 		//}
 	}
 
@@ -108,21 +106,21 @@ bool CRealServer::Start()
 
 	// ConEmuC ожидает готовый пайп после возврата из CECMD_SRVSTARTSTOP
 	if (!mp_RConServer->StartPipeServer(false, mp_RCon->ms_VConServer_Pipe, (LPARAM)this, LocalSecurity(),
-			ServerCommand, ServerCommandFree, NULL, NULL, ServerThreadReady))
+			ServerCommand, ServerCommandFree, nullptr, nullptr, ServerThreadReady))
 	{
 		MBoxAssert("mp_RConServer->StartPipeServer"==0);
 		return false;
 	}
 
 	//if (!mh_ServerSemaphore)
-	//	mh_ServerSemaphore = CreateSemaphore(NULL, 1, 1, NULL);
+	//	mh_ServerSemaphore = CreateSemaphore(nullptr, 1, 1, nullptr);
 	//for (int i=0; i<MAX_SERVER_THREADS; i++)
 	//{
 	//	if (mh_RConServerThreads[i])
 	//		continue;
 	//	mn_RConServerThreadsId[i] = 0;
-	//	mh_RConServerThreads[i] = apiCreateThread(NULL, 0, RConServerThread, (LPVOID)this, 0, &mn_RConServerThreadsId[i]);
-	//	_ASSERTE(mh_RConServerThreads[i]!=NULL);
+	//	mh_RConServerThreads[i] = apiCreateThread(nullptr, 0, RConServerThread, (LPVOID)this, 0, &mn_RConServerThreadsId[i]);
+	//	_ASSERTE(mh_RConServerThreads[i]!=nullptr);
 	//}
 
 	// чтобы ConEmuC знал, что мы готовы
@@ -258,7 +256,7 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 			if (pIn->hdr.nSrcPID == mp_RCon->mn_MainSrv_PID) // должно приходить из главного сервера
 			{
 				_ASSERTE(FALSE && "CECMD_SRVSTARTSTOP is used instead");
-				mp_RCon->OnServerClosing(mp_RCon->mn_MainSrv_PID, NULL);
+				mp_RCon->OnServerClosing(mp_RCon->mn_MainSrv_PID, nullptr);
 			}
 			else
 			{
@@ -309,9 +307,9 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 		//DWORD nParentPID = 0;
 		//if (nStarted == 2)
 		//{
-		//	ConProcess* pPrc = NULL;
+		//	ConProcess* pPrc = nullptr;
 		//	int i, nProcCount = GetProcesses(&pPrc);
-		//	if (pPrc != NULL)
+		//	if (pPrc != nullptr)
 		//	{
 		//		for (i = 0; i < nProcCount; i++) {
 		//			if (pPrc[i].ProcessID == nPID) {
@@ -492,15 +490,15 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 			{
 				pOut->StartStopRet.nWidth = mp_RCon->mp_RBuf->GetBufferWidth()/*con.m_sbi.dwSize.X*/;
 
-				//0x101 - запуск отладчика
-				if (nSubSystem != 0x100   // 0x100 - Аттач из фар-плагина
+				//0x101 - debugger start
+				if (nSubSystem != IMAGE_SUBSYSTEM_FAR_PLUGIN   // 0x100 - attach from Far Manager plugin
 				        && (mp_RCon->mp_RBuf->isScroll()
 				            || (mp_RCon->mn_DefaultBufferHeight && bRunViaCmdExe)))
 				{
 					// Смысл ассерта в том, что консоль запускаемая ИЗ ConEmu должна стартовать
 					// с корректным размером (заранее заданные через параметры для ConEmuC)
 					// А вот если идет аттач внешних консолей - то размер будет отличаться (и это нормально)
-					_ASSERTE(mp_RCon->mb_WasStartDetached || mp_RCon->mn_DefaultBufferHeight == mp_RCon->mp_RBuf->GetBufferHeight()/*con.m_sbi.dwSize.Y*/ || mp_RCon->mp_RBuf->GetBufferHeight()/*con.m_sbi.dwSize.Y*/ == mp_RCon->TextHeight());
+					_ASSERTE(mp_RCon->mb_WasStartDetached || mp_RCon->mn_DefaultBufferHeight == mp_RCon->mp_RBuf->GetBufferHeight()/*con.m_sbi.dwSize.Y*/ || static_cast<int>(mp_RCon->mp_RBuf->GetBufferHeight())/*con.m_sbi.dwSize.Y*/ == static_cast<int>(mp_RCon->TextHeight()));
 
 					pOut->StartStopRet.nBufferHeight = std::max<int>(mp_RCon->mp_RBuf->GetBufferHeight()/*con.m_sbi.dwSize.Y*/,mp_RCon->mn_DefaultBufferHeight);
 					_ASSERTE(mp_RCon->mp_RBuf->TextHeight()/*con.nTextHeight*/ >= 1);
@@ -549,7 +547,7 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 			BOOL lbNeedResizeGui = FALSE;
 			// {mp_RCon->TextWidth(),mp_RCon->TextHeight()} использовать нельзя,
 			// т.к. при если из фара выполняется "cmd -new_console:s" то при завершении
-			// RM_COMSPEC выполняется "возврат" размера буфера и это обламывает синхронизацию
+			// RunMode::RM_COMSPEC выполняется "возврат" размера буфера и это обламывает синхронизацию
 			// размера под измененную конфигурацию сплитов...
 			RECT rcCon = gpConEmu->CalcRect(CER_CONSOLE_CUR, mp_RCon->mp_VCon);
 			//COORD crNewSize = {mp_RCon->TextWidth(),mp_RCon->TextHeight()};
@@ -680,7 +678,7 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 
 				if (gpSet->gpConEmu->opt.DesktopMode)
 				{
-					MapWindowPoints(NULL, gpConEmu->mh_ShellWindow, (LPPOINT)&rcWnd, 2);
+					MapWindowPoints(nullptr, gpConEmu->mh_ShellWindow, (LPPOINT)&rcWnd, 2);
 				}
 
 				MOVEWINDOW(ghWnd, rcWnd.left, rcWnd.top, rcNew.right, rcNew.bottom, 1);
@@ -704,8 +702,8 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 	}
 	else if (nStarted == sst_AppStop && pIn->StartStop.nSubSystem == IMAGE_SUBSYSTEM_WINDOWS_GUI)
 	{
-		_ASSERTE(mp_RCon->GuiWnd()!=NULL);
-		mp_RCon->setGuiWnd(NULL);
+		_ASSERTE(mp_RCon->GuiWnd()!=nullptr);
+		mp_RCon->setGuiWnd(nullptr);
 	}
 
 	// Готовим результат к отправке
@@ -719,7 +717,7 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 
 //CESERVER_REQ* CRealServer::cmdGetGuiHwnd(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 //{
-//	CESERVER_REQ* pOut = NULL;
+//	CESERVER_REQ* pOut = nullptr;
 //
 //	DEBUGSTRCMD(L"GUI recieved CECMD_GETGUIHWND\n");
 //	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR) + 2*sizeof(DWORD));
@@ -730,7 +728,7 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 
 CESERVER_REQ* CRealServer::cmdTabsChanged(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_TABSCHANGED\n");
 
@@ -758,7 +756,7 @@ CESERVER_REQ* CRealServer::cmdTabsChanged(LPVOID pInst, CESERVER_REQ* pIn, UINT 
 		}
 
 		mp_RCon->tabs.m_Tabs.MarkTabsInvalid(CTabStack::MatchNonPanel, pIn->hdr.nSrcPID);
-		mp_RCon->SetTabs(NULL, 1, 0);
+		mp_RCon->SetTabs(nullptr, 1, 0);
 		gpConEmu->mp_TabBar->PrintRecentStack();
 	}
 	else
@@ -786,7 +784,7 @@ CESERVER_REQ* CRealServer::cmdTabsChanged(LPVOID pInst, CESERVER_REQ* pIn, UINT 
 					//               pRet,         // buffer to write from
 					//               pRet->hdr.cbSize,  // number of bytes to write
 					//               &cbWritten,   // number of bytes written
-					//               NULL);        // not overlapped I/O
+					//               nullptr);        // not overlapped I/O
 					ExecuteFreeResult(pRet);
 
 					// Чтобы в конце метода не дергаться
@@ -808,7 +806,7 @@ CESERVER_REQ* CRealServer::cmdTabsChanged(LPVOID pInst, CESERVER_REQ* pIn, UINT 
 	}
 
 	// Если еще не ответили плагину
-	if (pOut == NULL)
+	if (pOut == nullptr)
 		pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR));
 
 	return pOut;
@@ -816,7 +814,7 @@ CESERVER_REQ* CRealServer::cmdTabsChanged(LPVOID pInst, CESERVER_REQ* pIn, UINT 
 
 CESERVER_REQ* CRealServer::cmdGetOutputFile(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_GETOUTPUTFILE\n");
 	_ASSERTE(nDataSize>=4); //-V112
@@ -835,20 +833,19 @@ CESERVER_REQ* CRealServer::cmdGetOutputFile(LPVOID pInst, CESERVER_REQ* pIn, UIN
 
 CESERVER_REQ* CRealServer::cmdGuiMacro(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_GUIMACRO\n");
-	DWORD nFarPluginPID = mp_RCon->GetFarPID(true);
-	LPWSTR pszResult = ConEmuMacro::ExecuteMacro(pIn->GuiMacro.sMacro, mp_RCon, (nFarPluginPID==pIn->hdr.nSrcPID), &pIn->GuiMacro);
+	const DWORD nFarPluginPID = mp_RCon->GetFarPID(true);
+	const CEStr pszResult = ConEmuMacro::ExecuteMacro(pIn->GuiMacro.sMacro, mp_RCon, (nFarPluginPID==pIn->hdr.nSrcPID), &pIn->GuiMacro);
 
-	size_t nLen = pszResult ? _tcslen(pszResult) : 0;
-	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_GUIMACRO)+nLen*sizeof(wchar_t));
+	const size_t nLen = pszResult.GetLen();
+	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_REQ_GUIMACRO) + nLen * sizeof(wchar_t));
 
 	if (pszResult)
 	{
 		lstrcpy(pOut->GuiMacro.sMacro, pszResult);
 		pOut->GuiMacro.nSucceeded = 1;
-		free(pszResult);
 	}
 	else
 	{
@@ -861,7 +858,7 @@ CESERVER_REQ* CRealServer::cmdGuiMacro(LPVOID pInst, CESERVER_REQ* pIn, UINT nDa
 
 CESERVER_REQ* CRealServer::cmdLangChange(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRLANG(L"GUI recieved CECMD_LANGCHANGE\n");
 	_ASSERTE(nDataSize>=4); //-V112
@@ -919,7 +916,7 @@ CESERVER_REQ* CRealServer::cmdLangChange(LPVOID pInst, CESERVER_REQ* pIn, UINT n
 
 CESERVER_REQ* CRealServer::cmdTabsCmd(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	// 0: спрятать/показать табы, 1: перейти на следующую, 2: перейти на предыдущую, 3: commit switch
 	DEBUGSTRCMD(L"GUI recieved CECMD_TABSCMD\n");
@@ -933,7 +930,7 @@ CESERVER_REQ* CRealServer::cmdTabsCmd(LPVOID pInst, CESERVER_REQ* pIn, UINT nDat
 
 CESERVER_REQ* CRealServer::cmdResources(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_RESOURCES\n");
 	_ASSERTE(nDataSize>=6);
@@ -1032,7 +1029,7 @@ CESERVER_REQ* CRealServer::cmdResources(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 
 CESERVER_REQ* CRealServer::cmdSetForeground(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_SETFOREGROUNDWND\n");
 	AllowSetForegroundWindow(pIn->hdr.nSrcPID);
@@ -1056,7 +1053,7 @@ CESERVER_REQ* CRealServer::cmdSetForeground(LPVOID pInst, CESERVER_REQ* pIn, UIN
 
 CESERVER_REQ* CRealServer::cmdFlashWindow(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_FLASHWINDOW\n");
 
@@ -1077,7 +1074,7 @@ CESERVER_REQ* CRealServer::cmdFlashWindow(LPVOID pInst, CESERVER_REQ* pIn, UINT 
 
 CESERVER_REQ* CRealServer::cmdRegPanelView(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_REGPANELVIEW\n");
 	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(pIn->PVI));
@@ -1097,7 +1094,7 @@ CESERVER_REQ* CRealServer::cmdRegPanelView(LPVOID pInst, CESERVER_REQ* pIn, UINT
 
 CESERVER_REQ* CRealServer::cmdSetBackground(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_SETBACKGROUND\n");
 	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_SETBACKGROUNDRET));
@@ -1129,7 +1126,7 @@ CESERVER_REQ* CRealServer::cmdSetBackground(LPVOID pInst, CESERVER_REQ* pIn, UIN
 
 CESERVER_REQ* CRealServer::cmdActivateCon(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_ACTIVATECON\n");
 	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_ACTIVATECONSOLE));
@@ -1139,14 +1136,14 @@ CESERVER_REQ* CRealServer::cmdActivateCon(LPVOID pInst, CESERVER_REQ* pIn, UINT 
 	if (gpConEmu->Activate(mp_RCon->mp_VCon))
 		pOut->ActivateCon.hConWnd = mp_RCon->hConWnd;
 	else
-		pOut->ActivateCon.hConWnd = NULL;
+		pOut->ActivateCon.hConWnd = nullptr;
 
 	return pOut;
 }
 
 CESERVER_REQ* CRealServer::cmdOnCreateProc(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_ONCREATEPROC\n");
 	pOut = ExecuteNewCmd(pIn->hdr.nCmd,
@@ -1196,7 +1193,7 @@ CESERVER_REQ* CRealServer::cmdOnCreateProc(LPVOID pInst, CESERVER_REQ* pIn, UINT
 
 //CESERVER_REQ* CRealServer::cmdNewConsole(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 //{
-//	CESERVER_REQ* pOut = NULL;
+//	CESERVER_REQ* pOut = nullptr;
 //
 //	DEBUGSTRCMD(L"GUI recieved CECMD_NEWCONSOLE\n");
 //	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(wchar_t));
@@ -1207,7 +1204,7 @@ CESERVER_REQ* CRealServer::cmdOnCreateProc(LPVOID pInst, CESERVER_REQ* pIn, UINT
 
 CESERVER_REQ* CRealServer::cmdOnPeekReadInput(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_PEEKREADINFO\n");
 
@@ -1230,12 +1227,12 @@ CESERVER_REQ* CRealServer::cmdOnPeekReadInput(LPVOID pInst, CESERVER_REQ* pIn, U
 
 CESERVER_REQ* CRealServer::cmdOnSetConsoleKeyShortcuts(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_KEYSHORTCUTS\n");
 
 	mp_RCon->m_ConsoleKeyShortcuts = pIn->Data[0] ? pIn->Data[1] : 0;
-	gpConEmu->UpdateWinHookSettings();
+	gpConEmu->GetGlobalHotkeys().UpdateWinHookSettings();
 
 	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR));
 	return pOut;
@@ -1243,7 +1240,7 @@ CESERVER_REQ* CRealServer::cmdOnSetConsoleKeyShortcuts(LPVOID pInst, CESERVER_RE
 
 CESERVER_REQ* CRealServer::cmdLockDc(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_LOCKDC\n");
 
@@ -1257,11 +1254,11 @@ CESERVER_REQ* CRealServer::cmdLockDc(LPVOID pInst, CESERVER_REQ* pIn, UINT nData
 
 CESERVER_REQ* CRealServer::cmdGetAllTabs(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_GETALLTABS\n");
 
-	CESERVER_REQ_GETALLTABS::TabInfo* pTabs = NULL;
+	CESERVER_REQ_GETALLTABS::TabInfo* pTabs = nullptr;
 	size_t cchCount = CConEmuCtrl::GetOpenedTabs(pTabs);
 
 	if (cchCount && pTabs)
@@ -1286,11 +1283,11 @@ CESERVER_REQ* CRealServer::cmdGetAllTabs(LPVOID pInst, CESERVER_REQ* pIn, UINT n
 
 CESERVER_REQ* CRealServer::cmdGetAllPanels(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_GETALLPANELS\n");
 
-	wchar_t* pszDirs = NULL;
+	wchar_t* pszDirs = nullptr;
 	int iCount = 0, iCurrent = 0;
 	size_t cchSize = CConEmuCtrl::GetOpenedPanels(pszDirs, iCount, iCurrent);
 
@@ -1317,7 +1314,7 @@ CESERVER_REQ* CRealServer::cmdGetAllPanels(LPVOID pInst, CESERVER_REQ* pIn, UINT
 
 CESERVER_REQ* CRealServer::cmdActivateTab(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_ACTIVATETAB\n");
 
@@ -1343,11 +1340,11 @@ CESERVER_REQ* CRealServer::cmdActivateTab(LPVOID pInst, CESERVER_REQ* pIn, UINT 
 
 CESERVER_REQ* CRealServer::cmdRenameTab(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_SETTABTITLE\n");
 
-	LPCWSTR pszNewText = NULL;
+	LPCWSTR pszNewText = nullptr;
 	if (nDataSize >= 2*sizeof(wchar_t))
 		pszNewText = (wchar_t*)pIn->wData;
 
@@ -1361,16 +1358,19 @@ CESERVER_REQ* CRealServer::cmdRenameTab(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 
 CESERVER_REQ* CRealServer::cmdSetProgress(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CESERVER_REQ* pOut = NULL;
+	CESERVER_REQ* pOut = nullptr;
 
 	DEBUGSTRCMD(L"GUI recieved CECMD_SETPROGRESS\n");
 
 	bool lbOk = false;
-	if (nDataSize >= 2*sizeof(pIn->wData[0]))
+	if (nDataSize >= (2 * sizeof(pIn->wData[0])))
 	{
-		LPCWSTR pszName = (nDataSize >= 4*sizeof(pIn->wData[0])) ? (LPCWSTR)(pIn->wData+2) : NULL;
+		const wchar_t* pszName = (nDataSize >= (4 * sizeof(pIn->wData[0])))
+			? reinterpret_cast<const wchar_t*>(pIn->wData + 2)
+			: nullptr;
 
-		mp_RCon->SetProgress(pIn->wData[0], pIn->wData[1], pszName);
+		const auto state = static_cast<AnsiProgressStatus>(pIn->wData[0]);
+		lbOk = mp_RCon->SetProgress(state, pIn->wData[1], pszName);  // NOLINT(clang-diagnostic-array-bounds)
 	}
 
 	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(DWORD));
@@ -1381,11 +1381,11 @@ CESERVER_REQ* CRealServer::cmdSetProgress(LPVOID pInst, CESERVER_REQ* pIn, UINT 
 
 //CESERVER_REQ* CRealServer::cmdAssert(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 //{
-//	CESERVER_REQ* pOut = NULL;
+//	CESERVER_REQ* pOut = nullptr;
 //
 //	DEBUGSTRCMD(L"GUI recieved CECMD_ASSERT\n");
 //	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(wchar_t));
-//	pOut->wData[0] = MessageBox(NULL, pIn->AssertInfo.szDebugInfo, pIn->AssertInfo.szTitle, MB_SETFOREGROUND|MB_SYSTEMMODAL|MB_RETRYCANCEL);
+//	pOut->wData[0] = MessageBox(nullptr, pIn->AssertInfo.szDebugInfo, pIn->AssertInfo.szTitle, MB_SETFOREGROUND|MB_SYSTEMMODAL|MB_RETRYCANCEL);
 //
 //	return pOut;
 //}
@@ -1414,49 +1414,18 @@ CESERVER_REQ* CRealServer::cmdExportEnvVarAll(LPVOID pInst, CESERVER_REQ* pIn, U
 
 CESERVER_REQ* CRealServer::cmdStartXTerm(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	BOOL  bProcessed = TRUE;
-	DWORD nCmd = pIn->hdr.nCmd;
+	const DWORD nCmd = pIn->hdr.nCmd;
 	DEBUGSTRCMD(L"GUI recieved CECMD_STARTXTERM\n");
 
-	TermModeCommand mode = (TermModeCommand)pIn->dwData[0];
-	DWORD value = pIn->dwData[1];
-	DWORD nPID = (nDataSize >= (sizeof(DWORD)*3)) ? pIn->dwData[2] : pIn->hdr.nSrcPID;
+	const TermModeCommand mode = static_cast<TermModeCommand>(pIn->dwData[0]);
+	const DWORD value = pIn->dwData[1]; // NOLINT(clang-diagnostic-array-bounds)
+	const DWORD nPID = (nDataSize >= (sizeof(DWORD) * 3))
+		? pIn->dwData[2]  // NOLINT(clang-diagnostic-array-bounds)
+		: pIn->hdr.nSrcPID;
 
-	switch (mode)
-	{
-	case tmc_TerminalType:
-		_ASSERTE(value == te_win32 || value == te_xterm);
-		mp_RCon->StartStopXTerm(nPID, (value != te_win32));
-		break;
-	case tmc_MouseMode:
-		mp_RCon->StartStopXMouse(nPID, (TermMouseMode)value);
-		break;
-	case tmc_BracketedPaste:
-		mp_RCon->StartStopBracketedPaste(nPID, (value != 0));
-		break;
-	case tmc_AppCursorKeys:
-		mp_RCon->StartStopAppCursorKeys(nPID, (value != 0));
-		break;
-	case tmc_CursorShape:
-		mp_RCon->SetCursorShape((TermCursorShapes)value);
-		break;
-	case tmc_ConInMode:
-		// Some console application (not hooked?) changes ConInMode flag ENABLE_VIRTUAL_TERMINAL_INPUT
-		if ((mp_RCon->GetTermType() == te_xterm) != ((value & ENABLE_VIRTUAL_TERMINAL_INPUT) == ENABLE_VIRTUAL_TERMINAL_INPUT))
-		{
-			_ASSERTEX(mp_RCon->m_RootInfo.nPID == nPID); // expected PID at the moment
-			DWORD nRootPID = mp_RCon->m_RootInfo.nPID ? mp_RCon->m_RootInfo.nPID : nPID;
-			bool newXTerm = ((value & ENABLE_VIRTUAL_TERMINAL_INPUT) == ENABLE_VIRTUAL_TERMINAL_INPUT);
-			mp_RCon->StartStopXTerm(nRootPID, newXTerm);
-			if (newXTerm)
-				mp_RCon->StartStopAppCursorKeys(nRootPID, true);
-		}
-		break;
-	default:
-		bProcessed = FALSE;
-	}
+	const BOOL bProcessed = mp_RCon->StartStopTermMode(nPID, mode, value);
 
-	CESERVER_REQ* pOut = ExecuteNewCmd(nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(DWORD));
+	CESERVER_REQ* pOut = ExecuteNewCmd(nCmd, sizeof(CESERVER_REQ_HDR) + sizeof(DWORD));
 	if (pOut)
 		pOut->dwData[0] = bProcessed;
 	return pOut;
@@ -1487,64 +1456,41 @@ CESERVER_REQ* CRealServer::cmdSshAgentStarted(LPVOID pInst, CESERVER_REQ* pIn, U
 
 CESERVER_REQ* CRealServer::cmdQueryPalette(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	COLORREF* pcrColors = mp_RCon->VCon()->GetColors(false);
-	COLORREF* pcrFadeColors = mp_RCon->VCon()->GetColors(true);
-	CESERVER_REQ* pOut = NULL;
-	if (pcrColors)
+	const auto& pcrColors = mp_RCon->VCon()->GetColors(false);
+	const auto& pcrFadeColors = mp_RCon->VCon()->GetColors(true);
+	CESERVER_REQ* pOut = nullptr;
+	if ((pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_PALETTE))) != nullptr)
 	{
-		if ((pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_PALETTE))) != NULL)
-		{
-			_ASSERTE(sizeof(pOut->Palette.crPalette) == sizeof(COLORREF)*16);
-			memmove(pOut->Palette.crPalette, pcrColors, sizeof(pOut->Palette.crPalette));
+		_ASSERTE(sizeof(pOut->Palette.crPalette) == sizeof(COLORREF)*16);
+		memmove_s(pOut->Palette.crPalette, sizeof(pOut->Palette.crPalette),
+			pcrColors.data(), sizeof(pOut->Palette.crPalette));
 
-			_ASSERTE(sizeof(pOut->Palette.crFadePalette) == sizeof(COLORREF)*16);
-			memmove(pOut->Palette.crFadePalette, pcrFadeColors, sizeof(pOut->Palette.crFadePalette));
-		}
+		_ASSERTE(sizeof(pOut->Palette.crFadePalette) == sizeof(COLORREF)*16);
+		memmove_s(pOut->Palette.crFadePalette, sizeof(pOut->Palette.crFadePalette),
+			pcrFadeColors.data(), sizeof(pOut->Palette.crFadePalette));
 	}
 	return pOut;
 }
 
 CESERVER_REQ* CRealServer::cmdGetTaskCmd(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
 {
-	CEStr lsData;
-	const CommandTasks* pTask = (pIn->DataSize() > sizeof(pIn->GetTask)) ? gpSet->CmdTaskGetByName(pIn->GetTask.data) : NULL;
-	if (pTask)
-	{
-		LPCWSTR pszTemp = pTask->pszCommands;
-		if ((pszTemp = NextLine(pszTemp, lsData)))
-		{
-			RConStartArgsEx args;
-			LPCWSTR pszRaw = gpConEmu->ParseScriptLineOptions(lsData.ms_Val, NULL, NULL);
-			if (pszRaw)
-			{
-				args.pszSpecialCmd = lstrdup(pszRaw);
-				// Parse all -new_console's
-				args.ProcessNewConArg();
-				// Prohbit external requests for credentials
-				args.CleanPermissions();
-				// Directory?
-				if (!args.pszStartupDir && pTask->pszGuiArgs)
-					pTask->ParseGuiArgs(&args);
-				// Prepare for execution
-				lsData = args.CreateCommandLine(false);
-			}
-		}
-	}
+	const CommandTasks* pTask = (pIn->DataSize() > sizeof(pIn->GetTask)) ? gpSet->CmdTaskGetByName(pIn->GetTask.data) : nullptr;
+	const CEStr lsData = pTask ? pTask->GetFirstCommandForPrompt() : L"";
 
-	ssize_t nLen = lsData.GetLen();
+	const ssize_t nLen = lsData.GetLen();
 
-	CESERVER_REQ* pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_REQ_TASK) + nLen*sizeof(wchar_t));
+	CESERVER_REQ* pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_REQ_TASK) + nLen * sizeof(wchar_t));
 	if (!pOut)
-		return NULL;
+		return nullptr;
 
 	if (nLen > 0)
 	{
-		pOut->GetTask.nIdx = TRUE;
+		pOut->GetTask.found = TRUE;
 		lstrcpy(pOut->GetTask.data, lsData.ms_Val);
 	}
 	else
 	{
-		pOut->GetTask.nIdx = FALSE;
+		pOut->GetTask.found = FALSE;
 		pOut->GetTask.data[0] = 0;
 	}
 
@@ -1561,8 +1507,8 @@ CESERVER_REQ* CRealServer::cmdIsAnsiExecAllowed(LPVOID pInst, CESERVER_REQ* pIn,
 	}
 	else if (nDataSize > sizeof(wchar_t))
 	{
-		LPCWSTR pszExec = (LPCWSTR)pIn->wData;
-		CEStr lsAllowed((LPCWSTR)gpSet->psAnsiAllowed);
+		const auto* pszExec = reinterpret_cast<LPCWSTR>(pIn->wData);
+		const CEStr lsAllowed(*gpSet->psAnsiAllowed);
 		LPCWSTR pszFrom = lsAllowed.ms_Val;
 		CEStr lsCmd;
 		while (!bAllowed && (pszFrom = NextLine(pszFrom, lsCmd)))
@@ -1586,7 +1532,7 @@ CESERVER_REQ* CRealServer::cmdIsAnsiExecAllowed(LPVOID pInst, CESERVER_REQ* pIn,
 
 	CESERVER_REQ* pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR) + sizeof(DWORD));
 	if (!pOut)
-		return NULL;
+		return nullptr;
 
 	pOut->dwData[0] = bAllowed;
 	_ASSERTE(pOut->dwData[0]==FALSE || pOut->dwData[0]==TRUE);
@@ -1602,7 +1548,7 @@ BOOL CRealServer::ServerCommand(LPVOID pInst, CESERVER_REQ* pIn, CESERVER_REQ* &
 	CRealConsole* pRCon = (CRealConsole*)pRSrv->mp_RCon;
 
 	ExecuteFreeResult(ppReply);
-	CESERVER_REQ *pOut = NULL;
+	CESERVER_REQ *pOut = nullptr;
 
 	if (pIn->hdr.nVersion != CESERVER_REQ_VER)
 	{
@@ -1751,10 +1697,10 @@ BOOL CRealServer::ServerCommand(LPVOID pInst, CESERVER_REQ* pIn, CESERVER_REQ* &
 
 	if (pOut != (CESERVER_REQ*)INVALID_HANDLE_VALUE)
 	{
-		if (pOut == NULL)
+		if (pOut == nullptr)
 		{
 			// Для четкости, методы должны сами возвращать реальный результат
-			_ASSERTE(pOut!=NULL);
+			_ASSERTE(pOut!=nullptr);
 			// Хотя бы "пустую" команду в ответ кинуть, а то ошибка (Pipe was closed) у клиента возникает
 			pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR));
 		}
@@ -1770,17 +1716,17 @@ BOOL CRealServer::ServerCommand(LPVOID pInst, CESERVER_REQ* pIn, CESERVER_REQ* &
 		}
 
 		//// Всегда чего-нибудь ответить в пайп, а то ошибка (Pipe was closed) у клиента возникает
-		//fSuccess = WriteFile(hPipe, pOut, pOut->hdr.cbSize, &cbWritten, NULL);
+		//fSuccess = WriteFile(hPipe, pOut, pOut->hdr.cbSize, &cbWritten, nullptr);
 		//ExecuteFreeResult(pOut);
 	}
 	else
 	{
 		DWORD dwDur = timeGetTime() - dwTimeStart;
-		CSetPgDebug::debugLogCommand(pIn, TRUE, dwTimeStart, dwDur, pRCon->ms_VConServer_Pipe, NULL/*pOut*/);
+		CSetPgDebug::debugLogCommand(pIn, TRUE, dwTimeStart, dwDur, pRCon->ms_VConServer_Pipe, nullptr/*pOut*/);
 
 		// Delayed write
-		_ASSERTE(ppReply==NULL);
-		ppReply = NULL;
+		_ASSERTE(ppReply==nullptr);
+		ppReply = nullptr;
 		lbRc = TRUE;
 	}
 
@@ -1788,7 +1734,7 @@ BOOL CRealServer::ServerCommand(LPVOID pInst, CESERVER_REQ* pIn, CESERVER_REQ* &
 	//// Освободить память
 	//if (pIn && (LPVOID)pIn != (LPVOID)&in)
 	//{
-	//	free(pIn); pIn = NULL;
+	//	free(pIn); pIn = nullptr;
 	//}
 
 	MCHKHEAP;

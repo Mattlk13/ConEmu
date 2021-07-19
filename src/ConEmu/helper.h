@@ -32,7 +32,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/CEStr.h"
 
 extern BOOL gbInDisplayLastError;
-int DisplayLastError(LPCTSTR asLabel, DWORD dwError = 0, DWORD dwMsgFlags = 0, LPCWSTR asTitle = NULL, HWND hParent = NULL);
+int DisplayLastError(LPCTSTR asLabel, DWORD dwError = 0, DWORD dwMsgFlags = 0, LPCWSTR asTitle = nullptr, HWND hParent = nullptr);
 
 // All window/gdi related code must be run in main thread
 bool isMainThread();
@@ -40,10 +40,8 @@ void initMainThread();
 
 const wchar_t* DupCygwinPath(LPCWSTR asWinPath, bool bAutoQuote, LPCWSTR asMntPrefix, CEStr& path);
 LPCWSTR MakeWinPath(LPCWSTR asAnyPath, LPCWSTR pszMntPrefix, CEStr& szWinPath);
-wchar_t* MakeStraightSlashPath(LPCWSTR asWinPath);
+CEStr MakeStraightSlashPath(LPCWSTR asWinPath);
 bool FixDirEndSlash(wchar_t* rsPath);
-
-void EscapeChar(bool bSet, LPCWSTR& pszSrc, LPWSTR& pszDst);
 
 bool isKey(DWORD wp,DWORD vk);
 

@@ -30,6 +30,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define DOWNLOADER_IMPORTS
 #include "../ConEmuCD/DownloaderCall.h"
+#include "../common/MSectionSimple.h"
+#include "TempFile.h"
+#include "UpdateSet.h"
 
 #define UPD_PROGRESS_CONFIRM_DOWNLOAD  5
 #define UPD_PROGRESS_DOWNLOAD_START   10
@@ -46,48 +49,51 @@ extern CConEmuUpdate* gpUpd;
 class CConEmuUpdate
 {
 protected:
-	BOOL mb_InCheckProcedure;
-	DWORD mn_CheckThreadId;
-	HANDLE mh_CheckThread;
+	bool mb_InCheckProcedure{ false };
+	DWORD mn_CheckThreadId{ 0 };
+	HANDLE mh_CheckThread{ nullptr };
 
 	//HANDLE mh_StopThread;
 
-	bool mb_InetMode, mb_DroppedMode;
-	DWORD mn_InternetContentReady, mn_PackageSize;
+	bool mb_InetMode{ false };
+	bool mb_DroppedMode{ false };
+	DWORD mn_InternetContentReady{ 0 };
+	DWORD mn_PackageSize{ 0 };
 
 	struct wininet
 	{
-		CConEmuUpdate* pUpd;
-		HMODULE hDll;
-		DownloadCommand_t DownloadCommand;
+		CConEmuUpdate* pUpd{ nullptr };
+		HMODULE hDll{ nullptr };
+		DownloadCommand_t DownloadCommand{ nullptr };
+
 		bool Init(CConEmuUpdate* apUpd);
 		bool Deinit(bool bFull);
 		void SetCallback(CEDownloadCommand cbk, FDownloadCallback pfnCallback, LPARAM lParam);
-	} Inet;
+	};
+	wininet Inet{};
 
 	static void WINAPI ProgressCallback(const CEDownloadInfo* pError);
 	static void WINAPI ErrorCallback(const CEDownloadInfo* pError);
 	static void WINAPI LogCallback(const CEDownloadInfo* pError);
 
-	UINT mb_ManualCallMode; // FALSE, TRUE, 2 (click on TSA icon)
-	ConEmuUpdateSettings* mp_Set;
+	UpdateCallMode m_ManualCallMode{ UpdateCallMode::Automatic };
+	ConEmuUpdateSettings* mp_Set{ nullptr };
 
-	long mn_InShowMsgBox;
-	long mn_ErrorInfoCount;
-	long mn_ErrorInfoSkipCount;
+	long mn_InShowMsgBox{ 0 };
+	long mn_ErrorInfoCount{ 0 };
+	long mn_ErrorInfoSkipCount{ 0 };
 
-	MSectionSimple* mps_ErrorLock;
-	wchar_t* ms_LastErrorInfo;
+	MSectionSimple ms_ErrorLock{true};
+	CEStr ms_LastErrorInfo;
 
-	wchar_t* mpsz_DeleteIniFile;
-	wchar_t* mpsz_DeletePackageFile;
-	wchar_t* mpsz_DeleteBatchFile;
+	TempFile msz_DeletePackageFile;
+	TempFile msz_DeleteBatchFile;
 	void DeleteBadTempFiles();
 
-	wchar_t* mpsz_PendingPackageFile;
-	wchar_t* mpsz_PendingBatchFile;
+	TempFile msz_PendingPackageFile;
+	TempFile msz_PendingBatchFile;
 
-	CEStr ms_TempUpdateVerLocation;
+	TempFile ms_TempUpdateVerLocation;
 
 	CEStr ms_TemplFilename;
 	CEStr ms_SourceFull;
@@ -97,61 +103,63 @@ protected:
 	DWORD CheckProcInt();
 	void GetVersionsFromIni(LPCWSTR pszUpdateVerLocation, wchar_t (&szServer)[100], wchar_t (&szServerRA)[100], wchar_t (&szInfo)[100]);
 
-	wchar_t* CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, HANDLE& hFile);
-	wchar_t* CreateBatchFile(LPCWSTR asPackage);
+	TempFile CreateBatchFile(LPCWSTR asPackage);
 
 	bool IsLocalFile(LPWSTR& asPathOrUrl);
 	bool IsLocalFile(LPCWSTR& asPathOrUrl);
 
-	bool bNeedRunElevation;
+	bool bNeedRunElevation{ false };
 
-	BOOL DownloadFile(LPCWSTR asSource, LPCWSTR asTarget, DWORD& crc, BOOL abPackage = FALSE, LARGE_INTEGER* rpSize = NULL);
+	BOOL DownloadFile(LPCWSTR asSource, LPCWSTR asTarget, DWORD& crc, BOOL abPackage = FALSE, LARGE_INTEGER* rpSize = nullptr);
 
 	void ReportError(LPCWSTR asFormat, DWORD nErrCode);
 	void ReportError(LPCWSTR asFormat, LPCWSTR asArg, DWORD nErrCode);
 	void ReportError(LPCWSTR asFormat, LPCWSTR asArg1, LPCWSTR asArg2, DWORD nErrCode);
 	void ReportBrokenIni(LPCWSTR asSection, LPCWSTR asName, LPCWSTR asIniUrl, LPCWSTR asIniLocal);
 
-	void ReportErrorInt(wchar_t* asErrorInfo);
+	void ReportErrorInt(const ErrorInfo& error);
 
 public:
 	CConEmuUpdate();
 	~CConEmuUpdate();
 
-	void StartCheckProcedure(UINT abShowMessages);
+	void StartCheckProcedure(UpdateCallMode callMode);
 	void StopChecking();
 
 	static bool LocalUpdate(LPCWSTR asDownloadedPackage);
 	static bool IsUpdatePackage(LPCWSTR asFilePath);
 	static bool NeedRunElevation();
 
-	enum UpdateStep
+	enum class UpdateStep
 	{
-		us_NotStarted = 0,
-		us_Check,
-		us_ConfirmDownload,
-		us_Downloading,
-		us_ConfirmUpdate,
-		us_PostponeUpdate,
-		us_ExitAndUpdate,
+		NotStarted = 0,
+		Check,
+		ConfirmDownload,
+		Downloading,
+		ConfirmUpdate,
+		PostponeUpdate,
+		ExitAndUpdate,
 	};
 	UpdateStep InUpdate();
 
 	short GetUpdateProgress();
 
-	wchar_t* GetCurVerInfo();
+	CEStr GetCurVerInfo();
 
 protected:
+	bool mb_RequestTerminate{ false };
+	UpdateStep m_UpdateStep{ UpdateStep::NotStarted };
+	bool mb_NewVersionAvailable{ false };
+	wchar_t ms_NewVersion[64] = L"";
+	wchar_t ms_OurVersion[64] = L"";
+	wchar_t ms_SkipVersion[64] = L"";
+	wchar_t ms_VerOnServer[100] = L""; // Information about available server versions
+	wchar_t ms_VerOnServerRA[100] = L""; // Information about available server versions (right aligned)
+	wchar_t ms_CurVerInfo[100] = L"";  // Version + stable/preview/alpha
+	wchar_t ms_DefaultTitle[128] = L"";
+	CEStr msz_ConfirmSource;
+	
 	void RequestTerminate();
-	bool mb_RequestTerminate;
-	UpdateStep m_UpdateStep;
-	bool mb_NewVersionAvailable;
-	wchar_t ms_NewVersion[64], ms_OurVersion[64], ms_SkipVersion[64];
-	wchar_t ms_VerOnServer[100]; // Information about available server versions
-	wchar_t ms_VerOnServerRA[100]; // Information about available server versions (right aligned)
-	wchar_t ms_CurVerInfo[100];  // Version + stable/preview/alpha
-	wchar_t ms_DefaultTitle[128];
-	wchar_t* mpsz_ConfirmSource;
 	static LRESULT QueryConfirmationCallback(LPARAM lParam);
 	static LRESULT RequestExitUpdate(LPARAM);
 	static LRESULT ShowLastError(LPARAM apObj);
@@ -167,6 +175,5 @@ protected:
 	#endif
 	bool StartLocalUpdate(LPCWSTR asDownloadedPackage);
 	bool LoadVersionInfoFromServer();
-	bool LoadPackageFromServer();
-	wchar_t* CreateVersionOnServerInfo(bool abRightAligned, LPCWSTR asSuffix = NULL);
+	CEStr CreateVersionOnServerInfo(bool abRightAligned, LPCWSTR asSuffix = nullptr);
 };

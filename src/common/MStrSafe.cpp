@@ -31,6 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "defines.h"
 #include "MAssert.h"
 #include "MStrSafe.h"
+#include "CEStr.h"
 
 // Используется в ConEmuC.exe, и для минимизации кода
 // менеджер памяти тут использоваться не должен!
@@ -45,18 +46,37 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#endif
 #endif
 
-LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
+// ReSharper disable once CppInconsistentNaming
+const wchar_t* msprintf(wchar_t* lpOut, const size_t cchOutMax, const wchar_t* lpFmt, ...)
 {
 	va_list argptr;
 	va_start(argptr, lpFmt);
+	const auto* result = mvsprintf(lpOut, cchOutMax, lpFmt, argptr);
+	va_end(argptr);
+	return result;
+}
+
+const wchar_t* mvsprintf(wchar_t* lpOut, size_t cchOutMax, const wchar_t* lpFmt, va_list argptr)
+{
+	if (!lpOut || !cchOutMax)
+		return nullptr;
 	
 	const wchar_t* pszSrc = lpFmt;
 	wchar_t* pszDst = lpOut;
+	const wchar_t* endPtr = lpOut + (cchOutMax - 1); // maximum available write position ('\0')
+	bool overflow = false;
 	wchar_t  szValue[16];
 	wchar_t* pszValue;
 
 	while (*pszSrc)
 	{
+		if (pszDst >= endPtr)
+		{
+			_ASSERTE(FALSE && "output buffer overflow");
+			overflow = true;
+			break;
+		}
+		
 		if (*pszSrc == L'%')
 		{
 			pszSrc++;
@@ -71,7 +91,7 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 			case L'c':
 				{
 					// GCC: 'wchar_t' is promoted to 'int' when passed through '...'
-					wchar_t c = va_arg( argptr, int );
+					const wchar_t c = va_arg( argptr, int );
 					*(pszDst++) = c;
 					pszSrc++;
 					continue;
@@ -83,6 +103,12 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 					{
 						while (*pszValue)
 						{
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
 							*(pszDst++) = *(pszValue++);
 						}
 					}
@@ -94,11 +120,16 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 					char* pszValueA = va_arg( argptr, char* );
 					if (pszValueA)
 					{
-						// по хорошему, тут бы MultiByteToWideChar звать, но
-						// эта ветка должна по идее только для отладки использоваться
 						while (*pszValueA)
 						{
-							*(pszDst++) = (wchar_t)*(pszValueA++);
+							_ASSERTE(*pszValueA <= 0x7F); // Should be used only for debugging purposes
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
+							*(pszDst++) = static_cast<wchar_t>(*(pszValueA++));
 						}
 					}
 					pszSrc++;
@@ -110,7 +141,7 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 					UINT nValue = 0;
 					if (*pszSrc == L'i')
 					{
-						int n = va_arg( argptr, int );
+						const int n = va_arg( argptr, int );
 						if (n < 0)
 						{
 							*(pszDst++) = L'-';
@@ -129,15 +160,21 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 					pszValue = szValue;
 					while (nValue)
 					{
-						WORD n = (WORD)(nValue % 10);
-						*(pszValue++) = (wchar_t)(L'0' + n);
+						const WORD n = static_cast<WORD>(nValue % 10);
+						*(pszValue++) = static_cast<wchar_t>(L'0' + n);
 						nValue = (nValue - n) / 10;
 					}
 					if (pszValue == szValue)
 						*(pszValue++) = L'0';
-					// Теперь перекинуть в szGuiPipeName
+					// Move data to output buffer
 					while (pszValue > szValue)
 					{
+						if (pszDst >= endPtr)
+						{
+							_ASSERTE(FALSE && "output buffer overflow");
+							overflow = true;
+							break;
+						}
 						*(pszDst++) = *(--pszValue);
 					}
 					continue;
@@ -147,6 +184,7 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 			case L'x':
 				{
 					int nLen = 0;
+					// ReSharper disable once CppJoinDeclarationAndAssignment
 					DWORD nValue;
 					wchar_t cBase = L'A';
 					if (pszSrc[0] == L'0' && isDigit(pszSrc[1]) && (pszSrc[2] == L'X' || pszSrc[2] == L'x'))
@@ -178,7 +216,7 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 					{
 						cBase = 0;
 						szValue[0] = 0;
-						nLen = ((int)pszSrc[1]) - ((int)L'0');
+						nLen = static_cast<int>(pszSrc[1]) - static_cast<int>(L'0');
 						pszSrc += 3;
 					}
 					else if (pszSrc[0] == L'X' || pszSrc[0] == L'x')
@@ -201,14 +239,14 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 						// Hexadecimal branch
 						while (nValue)
 						{
-							WORD n = (WORD)(nValue & 0xF);
+							const WORD n = static_cast<WORD>(nValue & 0xF);
 							if (n <= 9)
-								*(pszValue++) = (wchar_t)(L'0' + n);
+								*(pszValue++) = static_cast<wchar_t>(L'0' + n);
 							else
-								*(pszValue++) = (wchar_t)(cBase + n - 10);
+								*(pszValue++) = static_cast<wchar_t>(cBase + n - 10);
 							nValue = nValue >> 4;
 						}
-						int nCurLen = (int)(pszValue - szValue);
+						int nCurLen = static_cast<int>(pszValue - szValue);
 						if (!nLen)
 						{
 							nLen = nCurLen;
@@ -225,6 +263,12 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 						// move result to Dest
 						while (pszValue > szValue)
 						{
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
 							*(pszDst++) = *(--pszValue);
 						}
 					}
@@ -234,15 +278,31 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 						int nGetLen = 0;
 						while (nValue)
 						{
-							WORD n = (WORD)(nValue % 10);
-							*(pszValue++) = (wchar_t)(L'0' + n);
+							const WORD n = static_cast<WORD>(nValue % 10);
+							*(pszValue++) = static_cast<wchar_t>(L'0' + n);
 							nValue = (nValue - n) / 10;
 							nGetLen++;
 						}
 						while ((nGetLen++) < nLen)
+						{
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
 							*(pszDst++) = L'0';
+						}
 						while ((--pszValue) >= szValue)
+						{
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
 							*(pszDst++) = *pszValue;
+						}
 					}
 					continue;
 				}
@@ -256,24 +316,42 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 		}
 	}
 wrap:
+	_ASSERTE(pszDst <= endPtr);
 	*pszDst = 0;
-	_ASSERTE(lstrlen(lpOut) < (int)cchOutMax);
-	va_end(argptr);
-	return lpOut;
+	_ASSERTE(lstrlen(lpOut) < static_cast<int>(cchOutMax));
+	return overflow ? nullptr : lpOut;
 }
 
-LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
+const char* msprintf(char* lpOut, const size_t cchOutMax, const char* lpFmt, ...)
 {
 	va_list argptr;
 	va_start(argptr, lpFmt);
+	const auto* result = mvsprintf(lpOut, cchOutMax, lpFmt, argptr);
+	va_end(argptr);
+	return result;
+}
+
+const char* mvsprintf(char* lpOut, size_t cchOutMax, const char* lpFmt, va_list argptr)
+{
+	if (!lpOut || !cchOutMax)
+		return nullptr;
 	
 	const char* pszSrc = lpFmt;
 	char* pszDst = lpOut;
+	const char* endPtr = lpOut + (cchOutMax - 1); // maximum available write position ('\0')
+	bool overflow = false;
 	char  szValue[16];
 	char* pszValue;
 
 	while (*pszSrc)
 	{
+		if (pszDst >= endPtr)
+		{
+			_ASSERTE(FALSE && "output buffer overflow");
+			overflow = true;
+			break;
+		}
+		
 		if (*pszSrc == '%')
 		{
 			pszSrc++;
@@ -288,7 +366,7 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 			case 'c':
 				{
 					// GCC: 'wchar_t' is promoted to 'int' when passed through '...'
-					char c = va_arg( argptr, int );
+					const char c = va_arg( argptr, int );
 					*(pszDst++) = c;
 					pszSrc++;
 					continue;
@@ -300,6 +378,12 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 					{
 						while (*pszValue)
 						{
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
 							*(pszDst++) = *(pszValue++);
 						}
 					}
@@ -308,14 +392,19 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 				}
 			case 'S':
 				{
-					char* pszValueA = va_arg( argptr, char* );
-					if (pszValueA)
+					wchar_t* pszValueW = va_arg( argptr, wchar_t* );
+					if (pszValueW)
 					{
-						// по хорошему, тут бы MultiByteToWideChar звать, но
-						// эта ветка должна по идее только для отладки использоваться
-						while (*pszValueA)
+						while (*pszValueW)
 						{
-							*(pszDst++) = (char)*(pszValueA++);
+							_ASSERTE(*pszValueW <= 0x7F); // Should be used only for debugging purposes
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
+							*(pszDst++) = static_cast<char>(*(pszValueW++));
 						}
 					}
 					pszSrc++;
@@ -327,7 +416,7 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 					UINT nValue = 0;
 					if (*pszSrc == 'i')
 					{
-						int n = va_arg( argptr, int );
+						const int n = va_arg( argptr, int );
 						if (n < 0)
 						{
 							*(pszDst++) = '-';
@@ -346,15 +435,21 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 					pszValue = szValue;
 					while (nValue)
 					{
-						WORD n = (WORD)(nValue % 10);
-						*(pszValue++) = (char)('0' + n);
+						const WORD n = static_cast<WORD>(nValue % 10);
+						*(pszValue++) = static_cast<char>('0' + n);
 						nValue = (nValue - n) / 10;
 					}
 					if (pszValue == szValue)
 						*(pszValue++) = '0';
-					// Теперь перекинуть в szGuiPipeName
+					// Move data to result buffer
 					while (pszValue > szValue)
 					{
+						if (pszDst >= endPtr)
+						{
+							_ASSERTE(FALSE && "output buffer overflow");
+							overflow = true;
+							break;
+						}
 						*(pszDst++) = *(--pszValue);
 					}
 					continue;
@@ -364,6 +459,7 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 			case 'x':
 				{
 					int nLen = 0;
+					// ReSharper disable once CppJoinDeclarationAndAssignment
 					DWORD nValue;
 					char cBase = 'A';
 					if (pszSrc[0] == '0' && isDigit(pszSrc[1]) && (pszSrc[2] == 'X' || pszSrc[2] == 'x'))
@@ -395,7 +491,7 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 					{
 						cBase = 0;
 						szValue[0] = 0;
-						nLen = ((int)pszSrc[1]) - ((int)'0');
+						nLen = static_cast<int>(pszSrc[1]) - static_cast<int>('0');
 						pszSrc += 3;
 					}
 					else if (pszSrc[0] == 'X' || pszSrc[0] == 'x')
@@ -418,14 +514,14 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 						// Hexadecimal branch
 						while (nValue)
 						{
-							WORD n = (WORD)(nValue & 0xF);
+							const WORD n = static_cast<WORD>(nValue & 0xF);
 							if (n <= 9)
-								*(pszValue++) = (char)('0' + n);
+								*(pszValue++) = static_cast<char>('0' + n);
 							else
-								*(pszValue++) = (char)(cBase + n - 10);
+								*(pszValue++) = static_cast<char>(cBase + n - 10);
 							nValue = nValue >> 4;
 						}
-						int nCurLen = (int)(pszValue - szValue);
+						int nCurLen = static_cast<int>(pszValue - szValue);
 						if (!nLen)
 						{
 							nLen = nCurLen;
@@ -442,6 +538,12 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 						// move result to Dest
 						while (pszValue > szValue)
 						{
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
 							*(pszDst++) = *(--pszValue);
 						}
 					}
@@ -451,15 +553,31 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 						int nGetLen = 0;
 						while (nValue)
 						{
-							WORD n = (WORD)(nValue % 10);
-							*(pszValue++) = (char)('0' + n);
+							const WORD n = static_cast<WORD>(nValue % 10);
+							*(pszValue++) = static_cast<char>('0' + n);
 							nValue = (nValue - n) / 10;
 							nGetLen++;
 						}
 						while ((nGetLen++) < nLen)
+						{
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
 							*(pszDst++) = '0';
+						}
 						while ((--pszValue) >= szValue)
+						{
+							if (pszDst >= endPtr)
+							{
+								_ASSERTE(FALSE && "output buffer overflow");
+								overflow = true;
+								break;
+							}
 							*(pszDst++) = *pszValue;
+						}
 					}
 					continue;
 				}
@@ -473,84 +591,94 @@ LPCSTR msprintf(LPSTR lpOut, size_t cchOutMax, LPCSTR lpFmt, ...)
 		}
 	}
 wrap:
+	_ASSERTE(pszDst <= endPtr);
 	*pszDst = 0;
-	_ASSERTE(lstrlenA(lpOut) < (int)cchOutMax);
-	va_end(argptr);
-	return lpOut;
+	_ASSERTE(lstrlenA(lpOut) < static_cast<int>(cchOutMax));
+	return overflow ? nullptr : lpOut;
 }
 
+static int CompareStringPointers(const void* asStr1, const void* asStr2)
+{
+	if (asStr1 == nullptr && asStr2)
+		return -1; // str1 is lesser than str2
+	if (asStr1 && asStr2 == nullptr)
+		return 1; // str1 is greater than str2
+	return 0;
+}
+
+// ReSharper disable once CppInconsistentNaming
 int lstrcmpni(LPCSTR asStr1, LPCSTR asStr2, int cchMax)
 {
-	char sz1[64], sz2[64];
-	char *ptr1, *ptr2;
+	if (!asStr1 || !asStr2 || cchMax <= 0)
+	{
+		return CompareStringPointers(asStr1, asStr2);
+	}
+
+	const int stackMaxLen = 64;
+	char sz1[stackMaxLen], sz2[stackMaxLen];
+	const char* ptr1; const char* ptr2;
+	CEStrA buf1, buf2;
 
 	int nCmp = 0;
 
-	if (cchMax >= 64)
+	if (cchMax >= stackMaxLen)
 	{
-		ptr1 = new char[cchMax+1];
-		ptr2 = new char[cchMax+1];
+		ptr1 = buf1.Set(asStr1, cchMax);
+		ptr2 = buf2.Set(asStr2, cchMax);
 	}
 	else
 	{
-		ptr1 = sz1;
-		ptr2 = sz2;
+		ptr1 = lstrcpynA(sz1, asStr1, cchMax + 1);
+		ptr2 = lstrcpynA(sz2, asStr2, cchMax + 1);
 	}
 
 	if (!ptr1 || !ptr2)
 	{
 		_ASSERTE(ptr1 && ptr2);
-		nCmp = 0;
+		nCmp = CompareStringPointers(ptr1, ptr2);
 	}
 	else
 	{
-		lstrcpynA(ptr1, asStr1, cchMax+1);
-		lstrcpynA(ptr2, asStr2, cchMax+1);
 		nCmp = lstrcmpiA(ptr1, ptr2);
 	}
-
-	if (ptr1 && ptr1 != sz1)
-		delete[] ptr1;
-	if (ptr2 && ptr2 != sz2)
-		delete[] ptr2;
 
 	return nCmp;
 }
 
 int lstrcmpni(LPCWSTR asStr1, LPCWSTR asStr2, int cchMax)
 {
-	wchar_t sz1[64], sz2[64];
-	wchar_t *ptr1, *ptr2;
+	if (!asStr1 || !asStr2 || cchMax <= 0)
+	{
+		return CompareStringPointers(asStr1, asStr2);
+	}
+
+	const int stackMaxLen = 64;
+	wchar_t sz1[stackMaxLen], sz2[stackMaxLen];
+	const wchar_t* ptr1; const wchar_t* ptr2;
+	CEStr buf1, buf2;
 
 	int nCmp = 0;
 
-	if (cchMax >= 64)
+	if (cchMax >= stackMaxLen)
 	{
-		ptr1 = new wchar_t[cchMax+1];
-		ptr2 = new wchar_t[cchMax+1];
+		ptr1 = buf1.Set(asStr1, cchMax);
+		ptr2 = buf2.Set(asStr2, cchMax);
 	}
 	else
 	{
-		ptr1 = sz1;
-		ptr2 = sz2;
+		ptr1 = lstrcpynW(sz1, asStr1, cchMax + 1);
+		ptr2 = lstrcpynW(sz2, asStr2, cchMax + 1);
 	}
 
 	if (!ptr1 || !ptr2)
 	{
 		_ASSERTE(ptr1 && ptr2);
-		nCmp = 0;
+		nCmp = CompareStringPointers(ptr1, ptr2);
 	}
 	else
 	{
-		lstrcpyn(ptr1, asStr1, cchMax+1);
-		lstrcpyn(ptr2, asStr2, cchMax+1);
 		nCmp = lstrcmpi(ptr1, ptr2);
 	}
-
-	if (ptr1 && ptr1 != sz1)
-		delete[] ptr1;
-	if (ptr2 && ptr2 != sz2)
-		delete[] ptr2;
 
 	return nCmp;
 }
@@ -562,7 +690,7 @@ int startswith(LPCWSTR asStr, LPCWSTR asPattern, bool abIgnoreCase)
 	if (!asStr || !*asStr || !asPattern || !*asPattern)
 		return 0;
 	int iCmp;
-	int iLen = lstrlen(asPattern);
+	const int iLen = lstrlen(asPattern);
 	if (abIgnoreCase)
 		iCmp = lstrcmpni(asStr, asPattern, iLen);
 	else
@@ -578,8 +706,7 @@ int swprintf_c(wchar_t* Buffer, INT_PTR size, const wchar_t *Format, ...)
 		DebugBreak();
 	va_list argList;
 	va_start(argList, Format);
-	int nRc;
-	nRc = StringCchVPrintfW(Buffer, size, Format, argList);
+	const int nRc = StringCchVPrintfW(Buffer, size, Format, argList);
 	va_end(argList);
 	return nRc;
 }
@@ -591,8 +718,7 @@ int sprintf_c(char* Buffer, INT_PTR size, const char *Format, ...)
 		DebugBreak();
 	va_list argList;
 	va_start(argList, Format);
-	int nRc;
-	nRc = StringCchVPrintfA(Buffer, size, Format, argList);
+	const int nRc = StringCchVPrintfA(Buffer, size, Format, argList);
 	va_end(argList);
 	return nRc;
 }

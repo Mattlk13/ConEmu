@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Release|Win32">
       <Configuration>Release</Configuration>
@@ -43,7 +43,7 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v141_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -55,7 +55,7 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v141_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Remote|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -67,7 +67,7 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v141_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -137,7 +137,7 @@
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN32;_WIN32;NDEBUG;HIDE_TODO;NOMINMAX;TESTS_MEMORY_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WIN32;NDEBUG;HIDE_TODO;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <Optimization>MinSpace</Optimization>
@@ -147,7 +147,12 @@
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ExceptionHandling>Sync</ExceptionHandling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WIN32;NDEBUG;HIDE_TODO;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -156,12 +161,15 @@
       <AdditionalDependencies>comctl32.lib;shlwapi.lib;version.lib;gdiplus.lib;winmm.lib;netapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateMapFile>true</GenerateMapFile>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ConEmu/conemu.gcc.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN64;_WIN64;NDEBUG;HIDE_TODO;NOMINMAX;TESTS_MEMORY_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN64;_WIN64;NDEBUG;HIDE_TODO;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <Optimization>MinSpace</Optimization>
@@ -171,7 +179,12 @@
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ExceptionHandling>Sync</ExceptionHandling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN64;_WIN64;NDEBUG;HIDE_TODO;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -180,78 +193,117 @@
       <AdditionalDependencies>comctl32.lib;shlwapi.lib;version.lib;gdiplus.lib;winmm.lib;netapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateMapFile>true</GenerateMapFile>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ConEmu/conemu.gcc.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN32;_WIN32;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WIN32;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ExceptionHandling>Sync</ExceptionHandling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WIN32;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>comctl32.lib;shlwapi.lib;version.lib;gdiplus.lib;winmm.lib;netapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateMapFile>true</GenerateMapFile>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ConEmu/conemu.gcc.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN64;_WIN64;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN64;_WIN64;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ExceptionHandling>Sync</ExceptionHandling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN64;_WIN64;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>comctl32.lib;shlwapi.lib;version.lib;gdiplus.lib;winmm.lib;netapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateMapFile>true</GenerateMapFile>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ConEmu/conemu.gcc.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Remote|Win32'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN32;_WIN32;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WIN32;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ExceptionHandling>Sync</ExceptionHandling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WIN32;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>comctl32.lib;shlwapi.lib;version.lib;gdiplus.lib;winmm.lib;netapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateMapFile>true</GenerateMapFile>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ConEmu/conemu.gcc.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Remote|x64'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN64;_WIN64;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN64;_WIN64;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ExceptionHandling>Sync</ExceptionHandling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN64;_WIN64;_DEBUG;HIDE_TODO;MSGLOGGER;NOMINMAX;TESTS_MEMORY_MODE;CE_UNIT_TEST=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>modules\googletest\googletest\include;modules\googletest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>comctl32.lib;shlwapi.lib;version.lib;gdiplus.lib;winmm.lib;netapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateMapFile>true</GenerateMapFile>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ConEmu/conemu.gcc.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="ConEmu\About.h" />
@@ -268,18 +320,19 @@
     <ClInclude Include="ConEmu\ConEmuSize.h" />
     <ClInclude Include="ConEmu\ConEmuStart.h" />
     <ClInclude Include="ConEmu\ConfirmDlg.h" />
-    <ClInclude Include="ConEmu\ConsoleMessages.h" />
     <ClInclude Include="ConEmu\CreateProcess.h" />
     <ClInclude Include="ConEmu\CustomFonts.h" />
     <ClInclude Include="ConEmu\DebugMsgLog.h" />
     <ClInclude Include="ConEmu\DefaultTerm.h" />
     <ClInclude Include="ConEmu\DlgItemHelper.h" />
+    <ClInclude Include="ConEmu\DontEnable.h" />
     <ClInclude Include="ConEmu\DpiAware.h" />
     <ClInclude Include="ConEmu\DragDrop.h" />
     <ClInclude Include="ConEmu\DragDropData.h" />
     <ClInclude Include="ConEmu\DwmApi_Part.h" />
     <ClInclude Include="ConEmu\DwmHelper.h" />
     <ClInclude Include="ConEmu\DynDialog.h" />
+    <ClInclude Include="ConEmu\ErrorInfo.h" />
     <ClInclude Include="ConEmu\FindDlg.h" />
     <ClInclude Include="ConEmu\FindPanel.h" />
     <ClInclude Include="ConEmu\Font.h" />
@@ -289,6 +342,7 @@
     <ClInclude Include="ConEmu\FrameHolder.h" />
     <ClInclude Include="ConEmu\GdiObjects.h" />
     <ClInclude Include="ConEmu\GestureEngine.h" />
+    <ClInclude Include="ConEmu\GlobalHotkeys.h" />
     <ClInclude Include="ConEmu\GuiServer.h" />
     <ClInclude Include="ConEmu\Header.h" />
     <ClInclude Include="ConEmu\HooksUnlocker.h" />
@@ -326,7 +380,6 @@
     <ClInclude Include="ConEmu\RealServer.h" />
     <ClInclude Include="ConEmu\Recreate.h" />
     <ClInclude Include="ConEmu\RefRelease.h" />
-    <ClInclude Include="ConEmu\Registry.h" />
     <ClInclude Include="ConEmu\RunQueue.h" />
     <ClInclude Include="ConEmu\ScreenDump.h" />
     <ClInclude Include="ConEmu\SearchCtrl.h" />
@@ -374,6 +427,7 @@
     <ClInclude Include="ConEmu\SetPgUpdate.h" />
     <ClInclude Include="ConEmu\SetPgViews.h" />
     <ClInclude Include="ConEmu\SetTypes.h" />
+    <ClInclude Include="ConEmu\SettingsStorage.h" />
     <ClInclude Include="ConEmu\ShObjIdl_Part.h" />
     <ClInclude Include="ConEmu\SizeInfo.h" />
     <ClInclude Include="ConEmu\Status.h" />
@@ -385,6 +439,7 @@
     <ClInclude Include="ConEmu\TaskBar.h" />
     <ClInclude Include="ConEmu\TaskBarGhost.h" />
     <ClInclude Include="ConEmu\TaskScheduler.h" />
+    <ClInclude Include="ConEmu\TempFile.h" />
     <ClInclude Include="ConEmu\TermX.h" />
     <ClInclude Include="ConEmu\ToolImg.h" />
     <ClInclude Include="ConEmu\TrayIcon.h" />
@@ -404,8 +459,10 @@
     <ClInclude Include="ConEmu\version.h" />
     <ClInclude Include="ConEmu\version_macro.h" />
     <ClInclude Include="ConEmu\version_stage.h" />
+    <ClInclude Include="UnitTests\test_mock_file.h" />
     <ClInclude Include="common\CEHandle.h" />
     <ClInclude Include="common\CEStr.h" />
+    <ClInclude Include="common\CmdArg.h" />
     <ClInclude Include="common\CmdLine.h" />
     <ClInclude Include="common\Common.h" />
     <ClInclude Include="common\ConEmuCheck.h" />
@@ -415,11 +472,13 @@
     <ClInclude Include="common\ConEmuInOut.h" />
     <ClInclude Include="common\ConEmuPipeMode.h" />
     <ClInclude Include="common\ConsoleAnnotation.h" />
+    <ClInclude Include="common\ConsoleMessages.h" />
     <ClInclude Include="common\ConsoleMixAttr.h" />
     <ClInclude Include="common\ConsoleRead.h" />
     <ClInclude Include="common\ConsoleTrueMod.h" />
     <ClInclude Include="common\DbgHlpGcc.h" />
     <ClInclude Include="common\DefTermBase.h" />
+    <ClInclude Include="common\DefTermChildMap.h" />
     <ClInclude Include="common\Dump.h" />
     <ClInclude Include="common\EmergencyShow.h" />
     <ClInclude Include="common\EnvVar.h" />
@@ -431,6 +490,7 @@
     <ClInclude Include="common\Keyboard.h" />
     <ClInclude Include="common\MArray.h" />
     <ClInclude Include="common\MAssert.h" />
+    <ClInclude Include="common\MAtomic.h" />
     <ClInclude Include="common\MBSTR.h" />
     <ClInclude Include="common\MCircular.h" />
     <ClInclude Include="common\MConHandle.h" />
@@ -440,6 +500,7 @@
     <ClInclude Include="common\MFileMapping.h" />
     <ClInclude Include="common\MGlobal.h" />
     <ClInclude Include="common\MGuiMacro.h" />
+    <ClInclude Include="common\MHandle.h" />
     <ClInclude Include="common\MJsonReader.h" />
     <ClInclude Include="common\MMap.h" />
     <ClInclude Include="common\MModule.h" />
@@ -459,9 +520,11 @@
     <ClInclude Include="common\MTimer.h" />
     <ClInclude Include="common\MToolHelp.h" />
     <ClInclude Include="common\MToolTip.h" />
+    <ClInclude Include="common\MWnd.h" />
     <ClInclude Include="common\MWow64Disable.h" />
     <ClInclude Include="common\Memory.h" />
     <ClInclude Include="common\Monitors.h" />
+    <ClInclude Include="common\PaletteColors.h" />
     <ClInclude Include="common\PipeServer.h" />
     <ClInclude Include="common\ProcessData.h" />
     <ClInclude Include="common\ProcessSetEnv.h" />
@@ -489,6 +552,7 @@
     <ClInclude Include="common\WThreads.h" />
     <ClInclude Include="common\WUser.h" />
     <ClInclude Include="common\clink.h" />
+    <ClInclude Include="common\crc32.h" />
     <ClInclude Include="common\defines.h" />
     <ClInclude Include="common\execute.h" />
     <ClInclude Include="common\md5.h" />
@@ -508,6 +572,7 @@
     <ClCompile Include="ConEmu\CmdHistory.cpp" />
     <ClCompile Include="ConEmu\ColorFix.cpp" />
     <ClCompile Include="ConEmu\ConEmu.cpp" />
+    <ClCompile Include="ConEmu\ConEmuCD_test.cpp" />
     <ClCompile Include="ConEmu\ConEmuCtrl.cpp" />
     <ClCompile Include="ConEmu\ConEmuPipe.cpp" />
     <ClCompile Include="ConEmu\ConEmuSize.cpp" />
@@ -517,11 +582,14 @@
     <ClCompile Include="ConEmu\CustomFonts.cpp" />
     <ClCompile Include="ConEmu\DefaultTerm.cpp" />
     <ClCompile Include="ConEmu\DlgItemHelper.cpp" />
+    <ClCompile Include="ConEmu\DontEnable.cpp" />
     <ClCompile Include="ConEmu\DpiAware.cpp" />
     <ClCompile Include="ConEmu\DragDrop.cpp" />
     <ClCompile Include="ConEmu\DragDropData.cpp" />
     <ClCompile Include="ConEmu\DwmHelper.cpp" />
     <ClCompile Include="ConEmu\DynDialog.cpp" />
+    <ClCompile Include="ConEmu\DynDialog_test.cpp" />
+    <ClCompile Include="ConEmu\ErrorInfo.cpp" />
     <ClCompile Include="ConEmu\FindDlg.cpp" />
     <ClCompile Include="ConEmu\FindPanel.cpp" />
     <ClCompile Include="ConEmu\Font.cpp" />
@@ -530,13 +598,16 @@
     <ClCompile Include="ConEmu\FrameHolder.cpp" />
     <ClCompile Include="ConEmu\GdiObjects.cpp" />
     <ClCompile Include="ConEmu\GestureEngine.cpp" />
+    <ClCompile Include="ConEmu\GlobalHotkeys.cpp" />
     <ClCompile Include="ConEmu\GuiServer.cpp" />
     <ClCompile Include="ConEmu\HooksUnlocker.cpp" />
     <ClCompile Include="ConEmu\HotkeyChord.cpp" />
+    <ClCompile Include="ConEmu\HotkeyChord_test.cpp" />
     <ClCompile Include="ConEmu\HotkeyDlg.cpp" />
     <ClCompile Include="ConEmu\HotkeyList.cpp" />
     <ClCompile Include="ConEmu\Hotkeys.cpp" />
     <ClCompile Include="ConEmu\Hotkeys_test.cpp" />
+    <ClCompile Include="ConEmu\HtmlCopy.cpp" />
     <ClCompile Include="ConEmu\IconList.cpp" />
     <ClCompile Include="ConEmu\ImgButton.cpp" />
     <ClCompile Include="ConEmu\Inside.cpp" />
@@ -547,6 +618,7 @@
     <ClCompile Include="ConEmu\MacroImpl.cpp" />
     <ClCompile Include="ConEmu\Macro_test.cpp" />
     <ClCompile Include="ConEmu\Match.cpp" />
+    <ClCompile Include="ConEmu\Match_test.cpp" />
     <ClCompile Include="ConEmu\Menu.cpp" />
     <ClCompile Include="ConEmu\MyClipboard.cpp" />
     <ClCompile Include="ConEmu\OleInitializer.cpp" />
@@ -562,7 +634,6 @@
     <ClCompile Include="ConEmu\RealConsole.cpp" />
     <ClCompile Include="ConEmu\RealServer.cpp" />
     <ClCompile Include="ConEmu\Recreate.cpp" />
-    <ClCompile Include="ConEmu\Registry.cpp" />
     <ClCompile Include="ConEmu\RunQueue.cpp" />
     <ClCompile Include="ConEmu\ScreenDump.cpp" />
     <ClCompile Include="ConEmu\SearchCtrl.cpp" />
@@ -609,6 +680,7 @@
     <ClCompile Include="ConEmu\SetPgTransparent.cpp" />
     <ClCompile Include="ConEmu\SetPgUpdate.cpp" />
     <ClCompile Include="ConEmu\SetPgViews.cpp" />
+    <ClCompile Include="ConEmu\SettingsStorage.cpp" />
     <ClCompile Include="ConEmu\SizeInfo.cpp" />
     <ClCompile Include="ConEmu\Status.cpp" />
     <ClCompile Include="ConEmu\SystemEnvironment.cpp" />
@@ -619,6 +691,8 @@
     <ClCompile Include="ConEmu\TaskBar.cpp" />
     <ClCompile Include="ConEmu\TaskBarGhost.cpp" />
     <ClCompile Include="ConEmu\TaskScheduler.cpp" />
+    <ClCompile Include="ConEmu\TempFile.cpp" />
+    <ClCompile Include="ConEmu\TempFile_test.cpp" />
     <ClCompile Include="ConEmu\TermX.cpp" />
     <ClCompile Include="ConEmu\ToolImg.cpp" />
     <ClCompile Include="ConEmu\TrayIcon.cpp" />
@@ -633,11 +707,21 @@
     <ClCompile Include="ConEmu\WinObjBase.cpp" />
     <ClCompile Include="ConEmu\all_test.cpp" />
     <ClCompile Include="ConEmu\helper.cpp" />
+    <ClCompile Include="ConEmuCD\StartEnv.cpp" />
+    <ClCompile Include="ConEmuCD\StartEnv_test.cpp" />
+    <ClCompile Include="ConEmuHk\DllOptions.cpp" />
+    <ClCompile Include="ConEmuHk\ShellProcessor.cpp" />
+    <ClCompile Include="ConEmuHk\ShellProcessor_test.cpp" />
+    <ClCompile Include="UnitTests\ansi_test.cpp" />
     <ClCompile Include="UnitTests\main_test.cpp" />
+    <ClCompile Include="UnitTests\test_mock_file.cpp" />
     <ClCompile Include="UnitTests\test_stubs.cpp" />
     <ClCompile Include="common\CEHandle.cpp" />
     <ClCompile Include="common\CEStr.cpp" />
+    <ClCompile Include="common\CEStr_test.cpp" />
+    <ClCompile Include="common\CmdArg.cpp" />
     <ClCompile Include="common\CmdLine.cpp" />
+    <ClCompile Include="common\CmdLine_test.cpp" />
     <ClCompile Include="common\Common.cpp" />
     <ClCompile Include="common\ConEmuCheck.cpp" />
     <ClCompile Include="common\ConEmuCheckEx.cpp" />
@@ -645,9 +729,12 @@
     <ClCompile Include="common\ConsoleRead.cpp" />
     <ClCompile Include="common\EmergencyShow.cpp" />
     <ClCompile Include="common\EnvVar.cpp" />
+    <ClCompile Include="common\EnvVar_test.cpp" />
+    <ClCompile Include="common\FileSystem_test.cpp" />
     <ClCompile Include="common\HandleKeeper.cpp" />
     <ClCompile Include="common\HkFunc.cpp" />
     <ClCompile Include="common\InQueue.cpp" />
+    <ClCompile Include="common\InQueue_test.cpp" />
     <ClCompile Include="common\Keyboard.cpp" />
     <ClCompile Include="common\MAssert.cpp" />
     <ClCompile Include="common\MBSTR.cpp" />
@@ -655,6 +742,7 @@
     <ClCompile Include="common\MEvent.cpp" />
     <ClCompile Include="common\MFileLog.cpp" />
     <ClCompile Include="common\MFileLogEx.cpp" />
+    <ClCompile Include="common\MFileMapping_test.cpp" />
     <ClCompile Include="common\MGlobal.cpp" />
     <ClCompile Include="common\MGuiMacro.cpp" />
     <ClCompile Include="common\MJsonReader.cpp" />
@@ -669,14 +757,19 @@
     <ClCompile Include="common\MSetter.cpp" />
     <ClCompile Include="common\MStrDup.cpp" />
     <ClCompile Include="common\MStrEsc.cpp" />
+    <ClCompile Include="common\MStrEsc_test.cpp" />
     <ClCompile Include="common\MStrSafe.cpp" />
+    <ClCompile Include="common\MStrSafe_test.cpp" />
     <ClCompile Include="common\MTimer.cpp" />
+    <ClCompile Include="common\MToolHelp_test.cpp" />
     <ClCompile Include="common\MToolTip.cpp" />
     <ClCompile Include="common\Memory.cpp" />
     <ClCompile Include="common\Monitors.cpp" />
     <ClCompile Include="common\ProcessSetEnv.cpp" />
+    <ClCompile Include="common\ProcessSetEnv_test.cpp" />
     <ClCompile Include="common\RConStartArgs.cpp" />
     <ClCompile Include="common\RConStartArgsEx.cpp" />
+    <ClCompile Include="common\RConStartArgsEx_test.cpp" />
     <ClCompile Include="common\RgnDetect.cpp" />
     <ClCompile Include="common\SetEnvVar.cpp" />
     <ClCompile Include="common\WCodePage.cpp" />
@@ -695,6 +788,12 @@
     <ClCompile Include="common\wcchars.cpp" />
     <ClCompile Include="common\wcwidth.cpp" />
     <ClCompile Include="modules\googletest\googletest\src\gtest-all.cc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ConEmu\conemu.gcc.manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="ConEmu\ConEmu.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

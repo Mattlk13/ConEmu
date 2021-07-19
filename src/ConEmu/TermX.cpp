@@ -69,7 +69,7 @@ bool TermX::GetSubstitute(const KEY_EVENT_RECORD& k, CEStr& lsSubst)
 		else
 		{
 			LastDeadCharVK = k.wVirtualKeyCode;
-			lsSubst.Clear();
+			lsSubst.Release();
 		}
 		return true;
 	}
@@ -134,7 +134,7 @@ bool TermX::GetSubstitute(const KEY_EVENT_RECORD& k, CEStr& lsSubst)
 			}
 			lsSubst.Set(szSubst);
 		}
-	} Processor = {xtc_None};
+	} Processor = {xtc_None, L""};
 
 	if (k.dwControlKeyState & (SHIFT_PRESSED))
 		Processor.Mods |= xtc_Shift;
@@ -255,7 +255,7 @@ bool TermX::GetSubstitute(const KEY_EVENT_RECORD& k, CEStr& lsSubst)
 				key_char = L'='; break;
 			default:
 				if (k.wVirtualKeyCode >= L'0' && k.wVirtualKeyCode <= L'9')
-					key_char = k.wVirtualKeyCode;
+					key_char = k.wVirtualKeyCode;  // NOLINT(bugprone-branch-clone)
 				else if (k.wVirtualKeyCode >= L'A' && k.wVirtualKeyCode <= L'Z')
 					key_char = k.wVirtualKeyCode;
 			}
@@ -378,7 +378,7 @@ bool TermX::GetSubstitute(const MOUSE_EVENT_RECORD& m, TermMouseMode MouseMode, 
 
 	if (!MouseMode)
 	{
-		lsSubst.Clear();
+		lsSubst.Release();
 		return false;
 	}
 
@@ -557,7 +557,7 @@ bool TermX::GetSubstitute(const MOUSE_EVENT_RECORD& m, TermMouseMode MouseMode, 
 	{
 		// If XTerm emulation for mouse was requested - don't try to send
 		// unprocessed mouse events in Windows way
-		lsSubst.Clear();
+		lsSubst.Release();
 	}
 
 	return true;

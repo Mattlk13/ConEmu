@@ -37,7 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/defines.h"
 #include <commctrl.h>
 
-#include "header.h"
+#include "Header.h"
 
 #include "../common/WUser.h"
 
@@ -48,7 +48,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "OptionsClass.h"
 #include "RealConsole.h"
 #include "Status.h"
-#include "TabBar.h"
+
+#include "GlobalHotkeys.h"
 #include "VConGroup.h"
 #include "VirtualConsole.h"
 
@@ -76,7 +77,7 @@ const wchar_t gsViewName[] = L"REAL";
 static StatusColInfo gStatusCols[] =
 {
 	// строго первая, НЕ отключаемая
-	{csi_Info,  NULL,   L"Show status bar",
+	{csi_Info,  nullptr,   L"Show status bar",
 						L"Hide status bar, you may restore it later from 'Settings...'"},
 	// Далее - по настройкам
 	{csi_ConsoleTitle,	L"StatusBar.Hide.Title",
@@ -298,7 +299,7 @@ CStatus::CStatus(CConEmuMain* _owner)
 
 	mn_Style = mn_ExStyle = 0;
 	mn_Zoom = mn_Dpi = 0;
-	mh_Fore = mh_Focus = NULL;
+	mh_Fore = mh_Focus = nullptr;
 	mn_ForePID = mn_FocusPID = 0;
 	ms_ForeInfo[0] = ms_FocusInfo[0] = 0;
 
@@ -317,7 +318,7 @@ CStatus::CStatus(CConEmuMain* _owner)
 	ZeroStruct(mt_LastTime);
 
 	//mn_BmpSize; -- не важно
-	mb_OldBmp = mh_Bmp = NULL; mh_MemDC = NULL;
+	mb_OldBmp = mh_Bmp = nullptr; mh_MemDC = nullptr;
 	ZeroStruct(mn_BmpSize);
 
 	for (int i = csi_Info; i < csi_Last; i++)
@@ -405,7 +406,7 @@ bool CStatus::LoadActiveProcess(CRealConsole* pRCon, wchar_t* pszText, int cchMa
 	return lbRc;
 }
 
-void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= NULL*/)
+void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= nullptr*/)
 {
 	#ifdef DUMP_STATUS_IMG
 	static bool bNeedDumpImage;
@@ -428,9 +429,9 @@ void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= NULL*/)
 	#ifdef _DEBUG
 	{
 		wchar_t szPos[100]; RECT rcScreen = rcStatus;
-		MapWindowPoints(ghWnd, NULL, (LPPOINT)&rcScreen, 2);
-		swprintf_c(szPos, L"StatusBar painted at {%i,%i}-{%i,%i} screen coords (%s)",
-			LOGRECTCOORDS(rcScreen), prcStatus ? L"PTR" : L"calc");
+		MapWindowPoints(ghWnd, nullptr, (LPPOINT)&rcScreen, 2);
+		swprintf_c(szPos, L"StatusBar painted at {%i,%i}-{%i,%i} (%ix%i) screen coords (%s)",
+			LOGRECTCOORDS(rcScreen), LOGRECTSIZE(rcScreen), prcStatus ? L"PTR" : L"calc");
 		DEBUGSTRPAINT(szPos);
 		//OutputDebugStringW(szPos); OutputDebugStringW(L"\n");
 	}
@@ -513,14 +514,14 @@ void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= NULL*/)
 
 	if (gpSet->isStatusBarFlags & csf_HorzDelim)
 	{
-		MoveToEx(hDrawDC, rcFill.left, rcFill.top, NULL);
+		MoveToEx(hDrawDC, rcFill.left, rcFill.top, nullptr);
 		LineTo(hDrawDC, rcFill.right+1, rcFill.top);
 	}
 
 
 	CVConGuard VCon;
-	CRealConsole* pRCon = NULL;
-	CVirtualConsole* pVCon = (gpConEmu->GetActiveVCon(&VCon) >= 0) ? VCon.VCon() : NULL;
+	CRealConsole* pRCon = nullptr;
+	CVirtualConsole* pVCon = (gpConEmu->GetActiveVCon(&VCon) >= 0) ? VCon.VCon() : nullptr;
 	if (pVCon)
 		pRCon = pVCon->RCon();
 
@@ -579,7 +580,7 @@ void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= NULL*/)
 			case csi_Info:
 			{
 				pszCalcText = ms_Status[0] ? ms_Status :
-					pRCon ? pRCon->GetConStatus() : NULL;
+					pRCon ? pRCon->GetConStatus() : nullptr;
 				pszTmp =
 					(m_ClickedItemDesc == csi_Info && !mb_InSetupMenu) ? L"Right click to show System Menu" :
 					((mb_InSetupMenu && m_ClickedItemDesc == csi_Info)
@@ -660,7 +661,7 @@ void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= NULL*/)
 				wcscpy_c(m_Items[nDrawCount].szFormat, L"InpGrp");
 				break;
 			case csi_InputLocale:
-				// чтобы не задавали вопросов, нафига дублируется.
+				// don't duplicate
 				if (LOWORD((DWORD)mhk_Locale) == HIWORD((DWORD)mhk_Locale))
 				{
 					swprintf_c(m_Items[nDrawCount].sText, countof(m_Items[nDrawCount].sText)-1/*#SECURELEN*/, L"%04X", LOWORD((DWORD)mhk_Locale));
@@ -674,7 +675,7 @@ void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= NULL*/)
 				break;
 			case csi_KeyHooks:
 				wcscpy_c(m_Items[nDrawCount].sText,
-					(gpConEmu->IsKeyboardHookRegistered() || gpSet->isKeyboardHooks(false, true))
+					(gpConEmu->GetGlobalHotkeys().IsKeyboardHookRegistered() || gpSet->isKeyboardHooks(false, true))
 					? L"KH" : L"––");
 				wcscpy_c(m_Items[nDrawCount].szFormat, L"XX");
 				break;
@@ -887,13 +888,13 @@ void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= NULL*/)
 				int nX = rcField.right - nW - 1;
 				int nY = rcField.top-1;
 				int nR = rcField.right;
-				MoveToEx(hDrawDC, nX, rcField.bottom, NULL);
+				MoveToEx(hDrawDC, nX, rcField.bottom, nullptr);
 				LineTo(hDrawDC, nR, nY);
 				nX += nShift; nY += nShift;
-				MoveToEx(hDrawDC, nX, rcField.bottom, NULL);
+				MoveToEx(hDrawDC, nX, rcField.bottom, nullptr);
 				LineTo(hDrawDC, nR, nY);
 				nX += nShift; nY += nShift;
-				MoveToEx(hDrawDC, nX, rcField.bottom, NULL);
+				MoveToEx(hDrawDC, nX, rcField.bottom, nullptr);
 				LineTo(hDrawDC, nR, nY);
 			}
 		}
@@ -902,7 +903,7 @@ void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= NULL*/)
 			switch (m_Items[i].nID)
 			{
 			case csi_SyncInside:
-				SetTextColor(hDrawDC, (gpConEmu->mp_Inside && gpConEmu->mp_Inside->mb_InsideSynchronizeCurDir) ? crText : crDash);
+				SetTextColor(hDrawDC, (gpConEmu->mp_Inside && gpConEmu->mp_Inside->IsSynchronizeCurDir()) ? crText : crDash);
 				break;
 			case csi_CapsLock:
 				SetTextColor(hDrawDC, mb_Caps ? crText : crDash);
@@ -973,7 +974,7 @@ void CStatus::PaintStatus(HDC hPaint, LPRECT prcStatus /*= NULL*/)
 
 			if ((gpSet->isStatusBarFlags & csf_VertDelim) && ((i+1) < nDrawCount))
 			{
-				MoveToEx(hDrawDC, rcField.right, rcField.top, NULL);
+				MoveToEx(hDrawDC, rcField.right, rcField.top, nullptr);
 				LineTo(hDrawDC, rcField.right, rcField.bottom+1);
 			}
 
@@ -997,7 +998,7 @@ wrap:
 	{
 		if (hDrawDC != hPaint)
 			DumpImage(mh_MemDC, mh_Bmp, nStatusWidth, nStatusHeight, pszDumpImgName);
-		DumpImage(hPaint, NULL, rcStatus.left, rcStatus.top, nStatusWidth, nStatusHeight, pszDumpImgDstName);
+		DumpImage(hPaint, nullptr, rcStatus.left, rcStatus.top, nStatusWidth, nStatusHeight, pszDumpImgDstName);
 	}
 	#endif
 
@@ -1050,7 +1051,7 @@ void CStatus::SetStatus(LPCWSTR asStatus)
 
 	// Может придти из подсказки меню
 	wchar_t* pch;
-	while ((pch = wcspbrk(ms_Status, L"\r\n\t")) != NULL)
+	while ((pch = wcspbrk(ms_Status, L"\r\n\t")) != nullptr)
 	{
 		*pch = L' ';
 	}
@@ -1091,11 +1092,11 @@ void CStatus::UpdateStatusBar(bool abForce /*= false*/, bool abRepaintNow /*= fa
 	// Do not call redraw syncronously because of possible termination deadlocks
 	if (abRepaintNow && isMainThread())
 	{
-		RedrawWindow(ghWnd, &rcInvalidated, NULL, RDW_INTERNALPAINT|RDW_NOERASE|RDW_NOFRAME|RDW_UPDATENOW|RDW_VALIDATE);
+		RedrawWindow(ghWnd, &rcInvalidated, nullptr, RDW_INTERNALPAINT|RDW_NOERASE|RDW_NOFRAME|RDW_UPDATENOW|RDW_VALIDATE);
 	}
 }
 
-void CStatus::InvalidateStatusBar(LPRECT rcInvalidated /*= NULL*/)
+void CStatus::InvalidateStatusBar(LPRECT rcInvalidated /*= nullptr*/)
 {
 	DEBUGSTRPAINT(L"CStatus::InvalidateStatusBar");
 
@@ -1134,7 +1135,7 @@ void CStatus::OnTimer()
 		else
 		{
 			POINT ptCurClient = {}; GetCursorPos(&ptCurClient);
-			MapWindowPoints(NULL, ghWnd, &ptCurClient, 1);
+			MapWindowPoints(nullptr, ghWnd, &ptCurClient, 1);
 			LRESULT l;
 			ProcessStatusMessage(ghWnd, WM_MOUSEMOVE, 0, 0, ptCurClient, l);
 		}
@@ -1189,7 +1190,7 @@ bool CStatus::IsResizeAllowed()
 // point - coordinates relative to UpperLeft corner of window client rect
 bool CStatus::IsCursorOverResizeMark(const POINT& ptCurClient)
 {
-	_ASSERTE(this);
+	AssertThisRet(false);
 
 	if (!IsResizeAllowed())
 		return false;
@@ -1227,7 +1228,7 @@ void CStatus::DoStatusResize(const POINT& ptScr)
 
 	gpConEmu->OnSizing(WMSZ_BOTTOMRIGHT, (LPARAM)&rcNew);
 
-	SetWindowPos(ghWnd, NULL,
+	SetWindowPos(ghWnd, nullptr,
 		rcNew.left, rcNew.top, rcNew.right - rcNew.left, rcNew.bottom - rcNew.top,
 		SWP_NOZORDER);
 
@@ -1235,8 +1236,8 @@ void CStatus::DoStatusResize(const POINT& ptScr)
 	RECT rcAfter = {}; GetWindowRect(ghWnd, &rcAfter);
 	#endif
 
-	// Force repaint to avoid artefacts
-	RedrawWindow(ghWnd, NULL, NULL, RDW_UPDATENOW);
+	// Force repaint to avoid artifacts
+	RedrawWindow(ghWnd, nullptr, nullptr, RDW_UPDATENOW);
 
 	// Store last point
 	mpt_StatusResizeCmp = ptScr;
@@ -1333,7 +1334,7 @@ bool CStatus::ProcessStatusMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 
 			if ((uMsg == WM_LBUTTONDOWN) || (uMsg == WM_LBUTTONDBLCLK))
 			{
-				MapWindowPoints(ghWnd, NULL, (LPPOINT)&rcClient, 2);
+				MapWindowPoints(ghWnd, nullptr, (LPPOINT)&rcClient, 2);
 
 				switch (m_ClickedItemDesc)
 				{
@@ -1360,7 +1361,7 @@ bool CStatus::ProcessStatusMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 				case csi_SyncInside:
 					if (gpConEmu->mp_Inside)
 					{
-						gpConEmu->mp_Inside->mb_InsideSynchronizeCurDir = !gpConEmu->mp_Inside->mb_InsideSynchronizeCurDir;
+						gpConEmu->mp_Inside->SetSynchronizeCurDir(!gpConEmu->mp_Inside->IsSynchronizeCurDir());
 					}
 					break;
 				case csi_CapsLock:
@@ -1393,7 +1394,7 @@ bool CStatus::ProcessStatusMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 			}
 			else if (uMsg == WM_RBUTTONUP)
 			{
-				MapWindowPoints(ghWnd, NULL, (LPPOINT)&rcClient, 2);
+				MapWindowPoints(ghWnd, nullptr, (LPPOINT)&rcClient, 2);
 
 				switch (m_ClickedItemDesc)
 				{
@@ -1439,7 +1440,7 @@ void CStatus::ShowStatusSetupMenu()
 {
 	POINT ptCur = {}; ::GetCursorPos(&ptCur);
 	POINT ptClient = ptCur;
-	MapWindowPoints(NULL, ghWnd, &ptClient, 1);
+	MapWindowPoints(nullptr, ghWnd, &ptClient, 1);
 
 	int nClickedID = -1;
 
@@ -1673,7 +1674,7 @@ void CStatus::OnWindowReposition(const RECT *prcNew)
 // отображать, чтобы лишнюю нагрузку не создавать.
 void CStatus::OnConsoleChanged(const CONSOLE_SCREEN_BUFFER_INFO* psbi, const CONSOLE_CURSOR_INFO* pci, const TOPLEFTCOORD* pTopLeft, bool bForceUpdate)
 {
-	bool bValid = (psbi != NULL && pTopLeft != NULL);
+	bool bValid = (psbi != nullptr && pTopLeft != nullptr);
 
 	// csi_ConsolePos:
 	if (bValid)
@@ -1737,7 +1738,6 @@ void CStatus::OnConsoleChanged(const CONSOLE_SCREEN_BUFFER_INFO* psbi, const CON
 	else
 	{
 		wcscpy_c(m_Values[csi_BufferSize].sText, L" ");
-		//m_Values[csi_BufferSize].sFormat = L"999x9999"; // на самом деле может быть до 9999, но для уменьшения ширины - по умолчанию так
 		wcscpy_c(m_Values[csi_BufferSize].szFormat, m_Values[csi_BufferSize].sText);
 	}
 
@@ -1752,7 +1752,7 @@ void CStatus::OnConsoleChanged(const CONSOLE_SCREEN_BUFFER_INFO* psbi, const CON
 
 void CStatus::OnCursorChanged(const COORD* pcr, const CONSOLE_CURSOR_INFO* pci, int nMaxX /*= 0*/, int nMaxY /*= 0*/)
 {
-	bool bValid = (pcr != NULL) && (pci != NULL);
+	bool bValid = (pcr != nullptr) && (pci != nullptr);
 
 	// csi_CursorX:
 	if (bValid)
@@ -1862,7 +1862,7 @@ void CStatus::OnActiveVConChanged(int nIndex/*0-based*/, CRealConsole* pRCon)
 
 	OnConsoleBufferChanged(pRCon);
 
-	HWND hView = NULL, hCon = NULL;
+	HWND hView = nullptr, hCon = nullptr;
 
 	if (pRCon)
 	{
@@ -1882,7 +1882,7 @@ void CStatus::OnActiveVConChanged(int nIndex/*0-based*/, CRealConsole* pRCon)
 	else
 	{
 		OnServerChanged(0, 0);
-		OnConsoleChanged(NULL, NULL, NULL, false);
+		OnConsoleChanged(nullptr, nullptr, nullptr, false);
 	}
 
 	// csi_ConEmuView
@@ -1926,11 +1926,11 @@ void CStatus::OnServerChanged(DWORD nMainServerPID, DWORD nAltServerPID)
 
 LPCWSTR CStatus::GetSettingName(CEStatusItems nID)
 {
-	_ASSERTE(this);
+	AssertThisRet(nullptr);
 	if (nID <= csi_Info || nID >= csi_Last)
-		return NULL;
+		return nullptr;
 
-	_ASSERTE(m_Values[nID].sSettingName!=NULL && m_Values[nID].sSettingName[0]!=0);
+	_ASSERTE(m_Values[nID].sSettingName!=nullptr && m_Values[nID].sSettingName[0]!=0);
 	return m_Values[nID].sSettingName;
 }
 
@@ -1966,12 +1966,12 @@ bool CStatus::IsKeyboardChanged()
 	bool bChanged = false;
 
 	SHORT states[3];
-	bool bCaps = ((states[0] = GetKeyState(VK_CAPITAL)) & 1) == 1;
-	bool bNum = ((states[1] = GetKeyState(VK_NUMLOCK)) & 1) == 1;
-	bool bScroll = ((states[2] = GetKeyState(VK_SCROLL)) & 1) == 1;
-	bool bKeyHooks = gpConEmu->IsKeyboardHookRegistered();
-	bool bGrouping = gpConEmu->isInputGrouped();
-	DWORD_PTR hkl = gpConEmu->GetActiveKeyboardLayout();
+	const bool bCaps = ((states[0] = GetKeyState(VK_CAPITAL)) & 1) == 1;
+	const bool bNum = ((states[1] = GetKeyState(VK_NUMLOCK)) & 1) == 1;
+	const bool bScroll = ((states[2] = GetKeyState(VK_SCROLL)) & 1) == 1;
+	const bool bKeyHooks = gpConEmu->GetGlobalHotkeys().IsKeyboardHookRegistered();
+	const bool bGrouping = gpConEmu->isInputGrouped();
+	const DWORD_PTR hkl = gpConEmu->GetActiveKeyboardLayout();
 
 	if (bCaps != mb_Caps)
 	{
@@ -2165,7 +2165,7 @@ bool CStatus::ProcessTransparentMenuId(WORD nCmd, bool abAlphaOnly)
 	bool bSelected = false;
 
 	StatusMenuOptions* p;
-	if ((p = GetStatusMenuItem(nCmd, gTranspOpt, countof(gTranspOpt))) != NULL)
+	if ((p = GetStatusMenuItem(nCmd, gTranspOpt, countof(gTranspOpt))) != nullptr)
 	{
 		// Change TEMPORARILY, without saving settings
 		if (p->nValue >= 40)
@@ -2207,7 +2207,7 @@ bool CStatus::ProcessTransparentMenuId(WORD nCmd, bool abAlphaOnly)
 bool CStatus::ProcessZoomMenuId(WORD nCmd)
 {
 	StatusMenuOptions* p;
-	if ((p = GetStatusMenuItem(nCmd, gZoomOpt, countof(gZoomOpt))) != NULL)
+	if ((p = GetStatusMenuItem(nCmd, gZoomOpt, countof(gZoomOpt))) != nullptr)
 	{
 		gpFontMgr->MacroFontSetSize(2, p->nValue);
 		return true;
@@ -2415,7 +2415,7 @@ HMENU CStatus::CreateStatusMenu(StatusMenuOptions* pItems, size_t nCount)
 		{
 			if (pItems[i].pfnChecked)
 			{
-				iChecked = pItems[i].pfnChecked(pItems[i].nValue, ((i+1) < nCount) ? &pItems[i+1].nValue : NULL);
+				iChecked = pItems[i].pfnChecked(pItems[i].nValue, ((i+1) < nCount) ? &pItems[i+1].nValue : nullptr);
 				if (iChecked == 1)
 					nCurrent = pItems[i].nMenuID;
 			}
@@ -2439,9 +2439,9 @@ HMENU CStatus::CreateStatusMenu(StatusMenuOptions* pItems, size_t nCount)
 CStatus::StatusMenuOptions* CStatus::GetStatusMenuItem(WORD nMenuID, StatusMenuOptions* pItems, size_t nCount)
 {
 	if (!nMenuID)
-		return NULL;
+		return nullptr;
 
-	CStatus::StatusMenuOptions* p = NULL;
+	CStatus::StatusMenuOptions* p = nullptr;
 
 	for (size_t i = 0; i < nCount; i++)
 	{
@@ -2477,7 +2477,7 @@ int CStatus::Transparent_IsMenuChecked(int nValue, int* pnNextValue)
 	}
 	else
 	{
-		_ASSERTE(pnNextValue!=NULL);
+		_ASSERTE(pnNextValue!=nullptr);
 	}
 
 	return false;
@@ -2530,7 +2530,7 @@ int CStatus::ShowStatusBarMenu(POINT pt, HMENU hPopup, CEStatusItems csi)
 	if (!GetStatusBarItemRect(csi, &rcExcl))
 		rcExcl = MakeRect(pt.x-1, pt.y-1, pt.x+1, pt.y+1);
 	else
-		MapWindowPoints(ghWnd, NULL, (LPPOINT)&rcExcl, 2);
+		MapWindowPoints(ghWnd, nullptr, (LPPOINT)&rcExcl, 2);
 
 	int nCmd = gpConEmu->mp_Menu->trackPopupMenu(tmp_StatusBarCols, hPopup, TPM_BOTTOMALIGN|TPM_RIGHTALIGN|TPM_RETURNCMD, pt.x, pt.y, ghWnd, &rcExcl);
 	return nCmd;

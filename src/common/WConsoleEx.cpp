@@ -157,16 +157,16 @@ ConsoleSectionHelper gsMapHelper;
 //
 BOOL SetConsoleInfo(HWND hwndConsole, CONSOLE_INFO *pci)
 {
-	DWORD   dwConsoleOwnerPid, dwCurProcId;
-	PVOID   ptrView = 0;
-	DWORD   dwLastError=0;
-	WCHAR   ErrText[255];
+	DWORD   dwConsoleOwnerPid;
+	PVOID   ptrView = nullptr;
+	DWORD   dwLastError = 0;
+	WCHAR   errText[255] = L"";
 	//
 	//	Retrieve the process which "owns" the console
 	//
-	dwCurProcId = GetCurrentProcessId();
+	const DWORD dwCurProcId = GetCurrentProcessId();
 
-	DEBUGTEST(DWORD dwConsoleThreadId =)
+	DEBUGTEST(const DWORD dwConsoleThreadId =)
 	GetWindowThreadProcessId(hwndConsole, &dwConsoleOwnerPid);
 
 	// We'll fail, if console was created by other process
@@ -175,7 +175,7 @@ BOOL SetConsoleInfo(HWND hwndConsole, CONSOLE_INFO *pci)
 		#ifdef _DEBUG
 		// Wine related
 		PROCESSENTRY32W pi = {};
-		GetProcessInfo(dwConsoleOwnerPid, &pi);
+		GetProcessInfo(dwConsoleOwnerPid, pi);
 		if (lstrcmpi(pi.szExeFile, L"wineconsole.exe")!=0)
 		{
 			wchar_t szDbgMsg[512], szTitle[128];
@@ -201,8 +201,8 @@ BOOL SetConsoleInfo(HWND hwndConsole, CONSOLE_INFO *pci)
 	if (!gsMapHelper.CreateConsoleSection())
 	{
 		dwLastError = GetLastError();
-		swprintf_c(ErrText, L"Can't CreateFileMapping(hSection). ErrCode=%i", dwLastError);
-		MessageBox(NULL, ErrText, L"ConEmu", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND);
+		swprintf_c(errText, L"Can't CreateFileMapping(hSection). ErrCode=%i", dwLastError);
+		MessageBox(NULL, errText, L"ConEmu", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND);
 		return FALSE;
 	}
 
@@ -214,8 +214,8 @@ BOOL SetConsoleInfo(HWND hwndConsole, CONSOLE_INFO *pci)
 	if (!ptrView)
 	{
 		dwLastError = GetLastError();
-		swprintf_c(ErrText, L"Can't MapViewOfFile. ErrCode=%i", dwLastError);
-		MessageBox(NULL, ErrText, L"ConEmu", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND);
+		swprintf_c(errText, L"Can't MapViewOfFile. ErrCode=%i", dwLastError);
+		MessageBox(NULL, errText, L"ConEmu", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND);
 	}
 	else
 	{
@@ -340,7 +340,7 @@ void SetConsoleFontSizeTo(HWND inConWnd, int inSizeY, int inSizeX, const wchar_t
 		gsMapHelper.pConsoleInfo->FontSize.Y				= inSizeY;
 		gsMapHelper.pConsoleInfo->FontFamily				= 0;//0x30;//FF_MODERN|FIXED_PITCH;//0x30;
 		gsMapHelper.pConsoleInfo->FontWeight				= 0;//0x400;
-		lstrcpynW(gsMapHelper.pConsoleInfo->FaceName, asFontName ? asFontName : L"Lucida Console", countof(gsMapHelper.pConsoleInfo->FaceName)); //-V303
+		lstrcpynW(gsMapHelper.pConsoleInfo->FaceName, asFontName ? asFontName : DEFAULT_CONSOLE_FONT_NAME, countof(gsMapHelper.pConsoleInfo->FaceName)); //-V303
 		gsMapHelper.pConsoleInfo->CursorSize				= 25;
 		gsMapHelper.pConsoleInfo->FullScreen				= FALSE;
 		gsMapHelper.pConsoleInfo->QuickEdit					= FALSE;

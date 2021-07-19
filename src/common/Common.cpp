@@ -32,11 +32,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
-void STRPTR2::Set(wchar_t* RVAL_REF ptrSrc, int cch /*= -1*/)
+void STRPTR2::Set(wchar_t*&& ptrSrc, int cch /*= -1*/)
 {
 	_ASSERTE(!cchCount && !bMangled && !psz);
 	if (cch < 0)
-		cch = (lstrlen(ptrSrc)+1);
+		cch = (lstrlen(ptrSrc) + 1);
 	cchCount = cch;
 	psz = ptrSrc;
 }

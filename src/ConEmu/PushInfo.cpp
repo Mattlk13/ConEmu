@@ -77,51 +77,66 @@ static CPushInfo::PushInfo gPushInfo[] = {
 #define INFO_MESSAGE_FOOTER L"<Yes> - open browser, <No> - stop buzzing."
 
 CPushInfo::CPushInfo()
-	: mp_Active(NULL)
+	: mp_Active(nullptr)
 {
-	SYSTEMTIME st = {};
 	FILETIME ft = {}, ft1 = {}, ft2 = {};
-
-	GetLocalTime(&st);
-	SystemTimeToFileTime(&st, &ft);
-
-	int iCmp;
-	for (INT_PTR i = 0; i < countof(gPushInfo); i++)
 	{
-		SYSTEMTIME st1 = {(WORD)gPushInfo[i].dtBegin.wYear, (WORD)gPushInfo[i].dtBegin.wMonth, 0, (WORD)gPushInfo[i].dtBegin.wDay};
-		SystemTimeToFileTime(&st1, &ft1);
-		SYSTEMTIME st2 = {(WORD)gPushInfo[i].dtEnd.wYear, (WORD)gPushInfo[i].dtEnd.wMonth, 0, (WORD)gPushInfo[i].dtEnd.wDay};
-		SystemTimeToFileTime(&st2, &ft2);
+		SYSTEMTIME st = {};
+		GetLocalTime(&st);
+		SystemTimeToFileTime(&st, &ft);
+	}
+
+	// ReSharper disable once CppJoinDeclarationAndAssignment
+	int iCmp;
+	for (auto& info : gPushInfo)
+	{
+		{
+			SYSTEMTIME st1{};
+			st1.wYear = static_cast<WORD>(info.dtBegin.wYear);
+			st1.wMonth = static_cast<WORD>(info.dtBegin.wMonth);
+			st1.wDay = static_cast<WORD>(info.dtBegin.wDay);
+			SystemTimeToFileTime(&st1, &ft1);
+		}
+
+		{
+			SYSTEMTIME st2{};
+			st2.wYear = static_cast<WORD>(info.dtEnd.wYear);
+			st2.wMonth = static_cast<WORD>(info.dtEnd.wMonth);
+			st2.wDay = static_cast<WORD>(info.dtEnd.wDay);
+			SystemTimeToFileTime(&st2, &ft2);
+		}
 
 		iCmp = CompareFileTime(&ft1, &ft);
-		if (iCmp > 0) continue;
+		if (iCmp > 0)
+			continue;
 		iCmp = CompareFileTime(&ft, &ft2);
-		if (iCmp > 0) continue;
+		if (iCmp > 0)
+			continue;
 
 		if (gpSet->StopBuzzingDate[0])
 		{
 			SYSTEMTIME stStop = {}; FILETIME ftStop = {};
 			wchar_t* pszEnd, *pszDate = gpSet->StopBuzzingDate;
 			if (isDigit(pszDate[0]))
-				stStop.wYear = wcstoul(pszDate, &pszEnd, 10);
+				stStop.wYear = static_cast<WORD>(wcstoul(pszDate, &pszEnd, 10));
 			if (stStop.wYear && pszEnd && *pszEnd == L'-')
-				stStop.wMonth = wcstoul((pszDate = (pszEnd+1)), &pszEnd, 10);
+				stStop.wMonth = static_cast<WORD>(wcstoul((pszDate = (pszEnd+1)), &pszEnd, 10));
 			if (stStop.wMonth && pszEnd && *pszEnd == L'-')
-				stStop.wDay = wcstoul((pszDate = (pszEnd+1)), &pszEnd, 10);
+				stStop.wDay = static_cast<WORD>(wcstoul((pszDate = (pszEnd+1)), &pszEnd, 10));
 			if (stStop.wDay)
 			{
 				SystemTimeToFileTime(&stStop, &ftStop);
-				int iCmp1 = CompareFileTime(&ft1, &ftStop);
-				int iCmp2 = CompareFileTime(&ftStop, &ft2);
+				const int iCmp1 = CompareFileTime(&ft1, &ftStop);
+				const int iCmp2 = CompareFileTime(&ftStop, &ft2);
 				if (iCmp1 <= 0 && iCmp2 <= 0)
 				{
 					// Don't show this notification in TSA
-					gPushInfo[i].pszTsaNotify = NULL;
+					info.pszTsaNotify = nullptr;
 				}
 			}
 		}
 
-		mp_Active = (gPushInfo + i);
+		mp_Active = &info;
 		break;
 	}
 }
@@ -180,7 +195,7 @@ void CPushInfo::OpenNotificationUrl()
 {
 	if (!mp_Active || !mp_Active->pszUrl)
 		return;
-	DWORD shellRc = (DWORD)(INT_PTR)ShellExecute(ghWnd, L"open", mp_Active->pszUrl, NULL, NULL, SW_SHOWNORMAL);
+	DWORD shellRc = (DWORD)(INT_PTR)ShellExecute(ghWnd, L"open", mp_Active->pszUrl, nullptr, nullptr, SW_SHOWNORMAL);
 	if (shellRc <= 32)
 	{
 		DisplayLastError(L"ShellExecute failed", shellRc);

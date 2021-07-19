@@ -84,7 +84,7 @@ class CConEmuChild
 		void OnAlwaysShowScrollbar(bool abSync = true);
 
 		int IsDcLocked(RECT* CurrentConLockedRect);
-		void LockDcRect(bool bLock, RECT* Rect = NULL);
+		void LockDcRect(bool bLock, RECT* Rect = nullptr);
 
 		void SetAutoCopyTimer(bool bEnabled);
 
@@ -119,6 +119,7 @@ class CConEmuChild
 		UINT mn_MsgTabChanged;
 		UINT mn_MsgPostFullPaint;
 		UINT mn_MsgSavePaneSnapshot;
+		UINT mn_MsgOnTitleChanged;
 		UINT mn_MsgDetachPosted;
 		UINT mn_MsgRestoreChildFocus;
 		bool mb_PostFullPaint;

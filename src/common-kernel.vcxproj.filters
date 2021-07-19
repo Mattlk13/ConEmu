@@ -15,6 +15,9 @@
     <ClInclude Include="common\CEStr.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="common\CmdArg.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="common\CmdLine.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -51,7 +54,13 @@
     <ClInclude Include="common\MConHandle.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="common\MEvent.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="common\MFileLog.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\MHandle.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="common\MModule.h">
@@ -81,6 +90,9 @@
     <ClInclude Include="common\MStrSafe.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="common\MWnd.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="common\Memory.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -102,6 +114,9 @@
     <ClInclude Include="common\WThreads.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="common\defines.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="common\execute.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -111,6 +126,9 @@
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="common\CEStr.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="common\CmdArg.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="common\CmdLine.cpp">
@@ -147,6 +165,9 @@
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="common\MConHandle.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="common\MEvent.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="common\MFileLog.cpp">

@@ -10,6 +10,9 @@
     <Filter Include="Headers">
       <UniqueIdentifier>{C196CD9C-2D76-4C38-368E-D70EA2ECB299}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Localizations">
+      <UniqueIdentifier>{E1A406F7-4D65-822D-16A0-CBAA821FC709}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Macro">
       <UniqueIdentifier>{F743A70D-6358-CFBE-2CDA-721E98ADCBEF}</UniqueIdentifier>
     </Filter>
@@ -69,9 +72,6 @@
     <ClInclude Include="ConEmu\ConfirmDlg.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="ConEmu\ConsoleMessages.h">
-      <Filter>Headers</Filter>
-    </ClInclude>
     <ClInclude Include="ConEmu\CreateProcess.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -85,6 +85,9 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\DlgItemHelper.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="ConEmu\DontEnable.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\DpiAware.h">
@@ -103,6 +106,9 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\DynDialog.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="ConEmu\ErrorInfo.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\FindDlg.h">
@@ -130,6 +136,9 @@
       <Filter>Graphics</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\GestureEngine.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="ConEmu\GlobalHotkeys.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\GuiServer.h">
@@ -166,19 +175,19 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\LngData.h">
-      <Filter>Headers</Filter>
+      <Filter>Localizations</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\LngDataEnum.h">
-      <Filter>Headers</Filter>
+      <Filter>Localizations</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\LngDataHints.h">
-      <Filter>Headers</Filter>
+      <Filter>Localizations</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\LngDataRsrcs.h">
-      <Filter>Headers</Filter>
+      <Filter>Localizations</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\LngRc.h">
-      <Filter>Headers</Filter>
+      <Filter>Localizations</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\LoadImg.h">
       <Filter>Graphics</Filter>
@@ -241,9 +250,6 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\RefRelease.h">
-      <Filter>Headers</Filter>
-    </ClInclude>
-    <ClInclude Include="ConEmu\Registry.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\RunQueue.h">
@@ -387,6 +393,9 @@
     <ClInclude Include="ConEmu\SetTypes.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="ConEmu\SettingsStorage.h">
+      <Filter>Settings</Filter>
+    </ClInclude>
     <ClInclude Include="ConEmu\ShObjIdl_Part.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -418,6 +427,9 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\TaskScheduler.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="ConEmu\TempFile.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmu\TermX.h">
@@ -483,6 +495,9 @@
     <ClInclude Include="common\CEStr.h">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="common\CmdArg.h">
+      <Filter>Common</Filter>
+    </ClInclude>
     <ClInclude Include="common\CmdLine.h">
       <Filter>Common</Filter>
     </ClInclude>
@@ -510,6 +525,9 @@
     <ClInclude Include="common\ConsoleAnnotation.h">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="common\ConsoleMessages.h">
+      <Filter>Common</Filter>
+    </ClInclude>
     <ClInclude Include="common\ConsoleMixAttr.h">
       <Filter>Common</Filter>
     </ClInclude>
@@ -523,6 +541,9 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="common\DefTermBase.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\DefTermChildMap.h">
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="common\Dump.h">
@@ -558,6 +579,9 @@
     <ClInclude Include="common\MAssert.h">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="common\MAtomic.h">
+      <Filter>Common</Filter>
+    </ClInclude>
     <ClInclude Include="common\MBSTR.h">
       <Filter>Common</Filter>
     </ClInclude>
@@ -583,6 +607,9 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="common\MGuiMacro.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\MHandle.h">
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="common\MJsonReader.h">
@@ -642,6 +669,9 @@
     <ClInclude Include="common\MToolTip.h">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="common\MWnd.h">
+      <Filter>Common</Filter>
+    </ClInclude>
     <ClInclude Include="common\MWow64Disable.h">
       <Filter>Common</Filter>
     </ClInclude>
@@ -649,6 +679,9 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="common\Monitors.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\PaletteColors.h">
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="common\PipeServer.h">
@@ -730,6 +763,9 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="common\clink.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\crc32.h">
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="common\defines.h">
@@ -815,6 +851,9 @@
     <ClCompile Include="ConEmu\DlgItemHelper.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="ConEmu\DontEnable.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="ConEmu\DpiAware.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
@@ -828,6 +867,9 @@
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="ConEmu\DynDialog.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="ConEmu\ErrorInfo.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="ConEmu\FindDlg.cpp">
@@ -854,6 +896,9 @@
     <ClCompile Include="ConEmu\GestureEngine.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="ConEmu\GlobalHotkeys.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="ConEmu\GuiServer.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
@@ -872,6 +917,9 @@
     <ClCompile Include="ConEmu\Hotkeys.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="ConEmu\HtmlCopy.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="ConEmu\IconList.cpp">
       <Filter>Graphics</Filter>
     </ClCompile>
@@ -882,10 +930,10 @@
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="ConEmu\LngData.cpp">
-      <Filter>Sources</Filter>
+      <Filter>Localizations</Filter>
     </ClCompile>
     <ClCompile Include="ConEmu\LngRc.cpp">
-      <Filter>Sources</Filter>
+      <Filter>Localizations</Filter>
     </ClCompile>
     <ClCompile Include="ConEmu\LoadImg.cpp">
       <Filter>Graphics</Filter>
@@ -942,9 +990,6 @@
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="ConEmu\Recreate.cpp">
-      <Filter>Sources</Filter>
-    </ClCompile>
-    <ClCompile Include="ConEmu\Registry.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="ConEmu\RunQueue.cpp">
@@ -1085,6 +1130,9 @@
     <ClCompile Include="ConEmu\SetPgViews.cpp">
       <Filter>Settings</Filter>
     </ClCompile>
+    <ClCompile Include="ConEmu\SettingsStorage.cpp">
+      <Filter>Settings</Filter>
+    </ClCompile>
     <ClCompile Include="ConEmu\SizeInfo.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
@@ -1113,6 +1161,9 @@
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="ConEmu\TaskScheduler.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="ConEmu\TempFile.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="ConEmu\TermX.cpp">
@@ -1156,7 +1207,13 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\Release\ConEmu\ConEmu.l10n">
+      <Filter>Localizations</Filter>
+    </None>
     <None Include="ConEmu\ConEmu.ico">
+      <Filter>Resources</Filter>
+    </None>
+    <None Include="ConEmu\ConEmu15.ico">
       <Filter>Resources</Filter>
     </None>
     <None Include="ConEmu\CursorDragCopy.cur">

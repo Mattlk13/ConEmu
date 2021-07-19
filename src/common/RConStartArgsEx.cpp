@@ -35,285 +35,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "MStrDup.h"
 #include "MStrSafe.h"
 #include "RConStartArgsEx.h"
-#include "Common.h"
-#include "WObjects.h"
 #include "CmdLine.h"
 
-#ifdef _DEBUG
-// for tests only
-#include "EnvVar.h"
-#endif
-
 #define DEBUGSTRPARSE(s) DEBUGSTR(s)
-
-#if defined(__GNUC__) && !defined(__MINGW64_VERSION_MAJOR)
-#define SecureZeroMemory(p,s) memset(p,0,s)
-#endif
-
-#ifdef _DEBUG
-
-#include "EnvVar.h"
-
-// На этом - ассерт возникает в NextArg
-// L"C:\\Windows\\system32\\cmd.exe /c echo moving \"\"..\\_VCBUILD\\final.ConEmuCD.32W.vc9\\ConEmuCD.pdb\"\" to \"..\\..\\Release\\ConEmu\\ConEmuCD.pdb\""
-// L"\"C:\\Program Files\\Microsoft SDKs\\Windows\\v7.0\\bin\\rc.EXE\" /D__GNUC__ /l 0x409 /fo\"\"..\\_VCBUILD\\final.ConEmu.32W.vc9\\obj\\ConEmu.res\"\" /d NDEBUG ConEmu.rc"
-
-void RConStartArgsEx::RunArgTests()
-{
-	CmdArg s;
-	s.Set(L"Abcdef", 3);
-	int nDbg = lstrcmp(s, L"Abc");
-	_ASSERTE(nDbg==0);
-	s.Set(L"qwerty");
-	nDbg = lstrcmp(s, L"qwerty");
-	_ASSERTE(nDbg==0);
-	s.Empty();
-	//s.Set(L""); // !! Set("") must trigger ASSERT !!
-	nDbg = s.ms_Val ? lstrcmp(s, L"") : -2;
-	_ASSERTE(nDbg==0);
-
-	struct { LPCWSTR pszWhole; LPCWSTR pszCmp[10]; } lsArgTest[] = {
-		{L"\"C:\\ConEmu\\ConEmuC64.exe\"  /PARENTFARPID=1 /C \"C:\\GIT\\cmdw\\ad.cmd CE12.sln & ci -m \"Solution debug build properties\"\"",
-			{L"C:\\ConEmu\\ConEmuC64.exe", L"/PARENTFARPID=1", L"/C", L"C:\\GIT\\cmdw\\ad.cmd", L"CE12.sln", L"&", L"ci", L"-m", L"Solution debug build properties"}},
-		{L"/C \"C:\\ad.cmd file.txt & ci -m \"Commit message\"\"",
-			{L"/C", L"C:\\ad.cmd", L"file.txt", L"&", L"ci", L"-m", L"Commit message"}},
-		{L"\"This is test\" Next-arg \t\n \"Third Arg +++++++++++++++++++\" ++", {L"This is test", L"Next-arg", L"Third Arg +++++++++++++++++++"}},
-		{L"\"\"cmd\"\"", {L"cmd"}},
-		{L"\"\"c:\\Windows\\System32\\cmd.exe\" /?\"", {L"c:\\Windows\\System32\\cmd.exe", L"/?"}},
-		// Following example is crazy, but quotation issues may happen
-		//{L"First Sec\"\"ond \"Thi\"rd\" \"Fo\"\"rth\"", {L"First", L"Sec\"\"ond", L"Thi\"rd", L"Fo\"\"rth"}},
-		{L"First \"Fo\"\"rth\"", {L"First", L"Fo\"rth"}},
-		// Multiple commands
-		{L"set ConEmuReportExe=VIM.EXE & SH.EXE", {L"set", L"ConEmuReportExe=VIM.EXE", L"&", L"SH.EXE"}},
-		// Inside escaped arguments
-		{L"reg.exe add \"HKCU\\MyCo\" /ve /t REG_EXPAND_SZ /d \"\\\"C:\\ConEmu\\ConEmuPortable.exe\\\" /Dir \\\"%V\\\" /cmd \\\"cmd.exe\\\" \\\"-new_console:nC:cmd.exe\\\" \\\"-cur_console:d:%V\\\"\" /f",
-			// Для наглядности:
-			// reg.exe add "HKCU\MyCo" /ve /t REG_EXPAND_SZ
-			//    /d "\"C:\ConEmu\ConEmuPortable.exe\" /Dir \"%V\" /cmd \"cmd.exe\" \"-new_console:nC:cmd.exe\" \"-cur_console:d:%V\"" /f
-			{L"reg.exe", L"add", L"HKCU\\MyCo", L"/ve", L"/t", L"REG_EXPAND_SZ", L"/d",
-			 L"\\\"C:\\ConEmu\\ConEmuPortable.exe\\\" /Dir \\\"%V\\\" /cmd \\\"cmd.exe\\\" \\\"-new_console:nC:cmd.exe\\\" \\\"-cur_console:d:%V\\\"",
-			 L"/f"}},
-		// Passsing -GuiMacro
-		{L"-GuiMacro \"print(\\\" echo abc \\\"); Context;\"",
-			{L"-GuiMacro", L"print(\\\" echo abc \\\"); Context;"}},
-		// After 'Inside escaped arguments' regression bug appears
-		{L"/dir \"C:\\\" /icon \"cmd.exe\" /single", {L"/dir", L"C:\\", L"/icon", L"cmd.exe", L"/single"}},
-		{L"cmd \"one.exe /dir \\\"C:\\\\\" /log\" \"two.exe /dir \\\"C:\\\" /log\" end", {L"cmd", L"one.exe /dir \\\"C:\\\\\" /log", L"two.exe /dir \\\"C:\\\" /log", L"end"}},
-		{NULL}
-	};
-	for (int i = 0; lsArgTest[i].pszWhole; i++)
-	{
-		s.Empty();
-		LPCWSTR pszTestCmd = lsArgTest[i].pszWhole;
-		int j = -1;
-		while (lsArgTest[i].pszCmp[++j])
-		{
-			if (!(pszTestCmd = NextArg(pszTestCmd, s)))
-			{
-				_ASSERTE(FALSE && "Fails on token!");
-			}
-			else
-			{
-				DemangleArg(s, s.mb_Quoted);
-				nDbg = lstrcmp(s, lsArgTest[i].pszCmp[j]);
-				if (nDbg != 0)
-				{
-					_ASSERTE(nDbg==0);
-				}
-			}
-		}
-	}
-
-	bool bTest = true;
-	for (size_t i = 0; bTest; i++)
-	{
-		RConStartArgs arg;
-		nDbg;
-		LPCWSTR pszCmp;
-
-		switch (i)
-		{
-		case 26:
-			// conemu-old-issues#1710: The un-eaten double quote
-			pszCmp = LR"(powershell -new_console:t:"PoSh":d:"%USERPROFILE%")";
-			arg.pszSpecialCmd = lstrdup(pszCmp);
-			arg.ProcessNewConArg();
-			_ASSERTE(arg.pszRenameTab && lstrcmp(arg.pszRenameTab, L"PoSh")==0);
-			_ASSERTE(arg.pszStartupDir && CEStr(ExpandEnvStr(L"%USERPROFILE%")).Compare(arg.pszStartupDir)==0);
-			break;
-		case 25:
-			pszCmp = LR"(cmd -new_console:u:"john:pass^"word^"")";
-			arg.pszSpecialCmd = lstrdup(pszCmp);
-			arg.ProcessNewConArg();
-			_ASSERTE(arg.pszUserName && lstrcmp(arg.pszUserName, L"john")==0);
-			_ASSERTE(arg.szUserPassword && lstrcmp(arg.szUserPassword, L"pass\"word\"")==0);
-			break;
-		case 24:
-			pszCmp = L"/C \"-new_console test.cmd bla\"";
-			arg.pszSpecialCmd = lstrdup(pszCmp);
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"/C \"test.cmd bla\"") && arg.NewConsole==crb_On);
-			break;
-		case 23:
-			pszCmp = L"-new_console test.cmd";
-			arg.pszSpecialCmd = lstrdup(pszCmp);
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"test.cmd") && arg.NewConsole==crb_On);
-			break;
-		case 22:
-			pszCmp = L"bash -cur_console:m:\"\"";
-			arg.pszSpecialCmd = lstrdup(pszCmp);
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"bash") && arg.pszMntRoot && *arg.pszMntRoot==0);
-			break;
-		case 21:
-			pszCmp = L"cmd '-new_console' `-new_console` \\\"-new_console\\\"";
-			arg.pszSpecialCmd = lstrdup(pszCmp);
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, pszCmp) && arg.NewConsole==crb_Undefined);
-			break;
-		case 20:
-			arg.pszSpecialCmd = lstrdup(L"\"c:\\cmd.exe\" \"-new_console\" \"c:\\file.txt\"");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"\"c:\\cmd.exe\" \"c:\\file.txt\""));
-			break;
-		case 19:
-			arg.pszSpecialCmd = lstrdup(L"\"c:\\cmd.exe\" -new_console:n \"c:\\file.txt\"");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"\"c:\\cmd.exe\" \"c:\\file.txt\""));
-			break;
-		case 18:
-			arg.pszSpecialCmd = lstrdup(L"\"c:\\cmd.exe\" \"-new_console:n\" \"c:\\file.txt\"");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"\"c:\\cmd.exe\" \"c:\\file.txt\""));
-			break;
-		case 17:
-			arg.pszSpecialCmd = lstrdup(L"c:\\cmd.exe \"-new_console:n\" \"c:\\file.txt\"");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"c:\\cmd.exe \"c:\\file.txt\""));
-			break;
-		case 16:
-			arg.pszSpecialCmd = lstrdup(L"\"c:\\cmd.exe\" \"-new_console:n\" c:\\file.txt");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"\"c:\\cmd.exe\" c:\\file.txt"));
-			break;
-		case 15:
-			arg.pszSpecialCmd = lstrdup(L"c:\\file.txt -cur_console");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"c:\\file.txt"));
-			break;
-		case 14:
-			arg.pszSpecialCmd = lstrdup(L"\"c:\\file.txt\" -cur_console");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"\"c:\\file.txt\""));
-			break;
-		case 13:
-			arg.pszSpecialCmd = lstrdup(L" -cur_console \"c:\\file.txt\"");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"\"c:\\file.txt\""));
-			break;
-		case 12:
-			arg.pszSpecialCmd = lstrdup(L"-cur_console \"c:\\file.txt\"");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"\"c:\\file.txt\""));
-			break;
-		case 11:
-			arg.pszSpecialCmd = lstrdup(L"-cur_console c:\\file.txt");
-			arg.ProcessNewConArg();
-			_ASSERTE(0==lstrcmp(arg.pszSpecialCmd, L"c:\\file.txt"));
-			break;
-		case 10:
-			pszCmp = L"reg.exe add \"HKCU\\command\" /ve /t REG_EXPAND_SZ /d \"\\\"C:\\ConEmu\\ConEmuPortable.exe\\\" /Dir \\\"%V\\\" /cmd \\\"cmd.exe\\\" \\\"-new_console:nC:cmd.exe\\\" \\\"-cur_console:d:%V\\\"\" /f";
-			arg.pszSpecialCmd = lstrdup(pszCmp);
-			arg.ProcessNewConArg();
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, pszCmp)==0 && arg.NewConsole==crb_Undefined);
-			break;
-		case 9:
-			pszCmp = L"\"C:\\Windows\\system32\\cmd.exe\" /C \"\"C:\\Python27\\python.EXE\"\"";
-			arg.pszSpecialCmd = lstrdup(pszCmp);
-			arg.ProcessNewConArg();
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, pszCmp)==0);
-			break;
-		case 8:
-			arg.pszSpecialCmd = lstrdup(L"cmd --new_console -cur_console:a");
-			arg.ProcessNewConArg();
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, L"cmd --new_console")==0 && arg.NewConsole==crb_Undefined && arg.RunAsAdministrator==crb_On);
-			break;
-		case 7:
-			arg.pszSpecialCmd = lstrdup(L"cmd -cur_console:d:\"C:\\My docs\":t:\"My title\" \"-cur_console:C:C:\\my cmd.ico\" -cur_console:P:\"<PowerShell>\":a /k ver");
-			arg.ProcessNewConArg();
-			pszCmp = L"cmd /k ver";
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, pszCmp)==0);
-			_ASSERTE(arg.pszRenameTab && arg.pszPalette && arg.pszIconFile && arg.pszStartupDir && arg.NewConsole==crb_Undefined && lstrcmp(arg.pszRenameTab, L"My title")==0 && lstrcmp(arg.pszPalette, L"<PowerShell>")==0 && lstrcmp(arg.pszStartupDir, L"C:\\My docs")==0 && lstrcmp(arg.pszIconFile, L"C:\\my cmd.ico")==0);
-			break;
-		case 6:
-			arg.pszSpecialCmd = lstrdup(L"cmd -cur_console:b:P:\"^<Power\"\"Shell^>\":t:\"My title\" /k ConEmuC.exe -Guimacro print(\"-new_console:a\")");
-			arg.ProcessNewConArg();
-			pszCmp = L"cmd /k ConEmuC.exe -Guimacro print(\"-new_console:a\")";
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, pszCmp)==0);
-			_ASSERTE(arg.pszRenameTab && arg.pszPalette && arg.BackgroundTab==crb_On && arg.NewConsole==crb_Undefined && arg.RunAsAdministrator==crb_Undefined && lstrcmp(arg.pszRenameTab, L"My title")==0 && lstrcmp(arg.pszPalette, L"<Power\"Shell>")==0);
-			break;
-		case 5:
-			arg.pszSpecialCmd = lstrdup(L"cmd \"-cur_console:t:My title\" /k ver");
-			arg.ProcessNewConArg();
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, L"cmd /k ver")==0);
-			_ASSERTE(arg.pszRenameTab && lstrcmp(arg.pszRenameTab, L"My title")==0 && arg.NewConsole==crb_Undefined);
-			break;
-		case 4:
-			arg.pszSpecialCmd = lstrdup(L"cmd \"-new_console:P:^<Power\"\"Shell^>\"");
-			arg.ProcessNewConArg();
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, L"cmd")==0);
-			nDbg = lstrcmp(arg.pszPalette, L"<Power\"Shell>");
-			_ASSERTE(nDbg==0 && arg.NewConsole==crb_On);
-			break;
-		case 3:
-			arg.pszSpecialCmd = lstrdup(L"cmd -cur_console:u:Max:");
-			arg.ProcessNewConArg();
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, L"cmd")==0);
-			nDbg = lstrcmp(arg.pszUserName,L"Max");
-			_ASSERTE(nDbg==0 && arg.pszDomain==NULL && !*arg.szUserPassword && arg.ForceUserDialog==crb_Off && arg.NewConsole!=crb_On);
-			break;
-		case 2:
-			arg.pszSpecialCmd = lstrdup(L"cmd -cur_console:u:Max -new_console");
-			arg.ProcessNewConArg();
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, L"cmd")==0);
-			nDbg = lstrcmp(arg.pszUserName,L"Max");
-			_ASSERTE(nDbg==0 && arg.pszDomain==NULL && !*arg.szUserPassword && arg.ForceUserDialog==crb_On && arg.NewConsole==crb_On);
-			break;
-		case 1:
-			arg.pszSpecialCmd = lstrdup(L"cmd -new_console:u -cur_console:h0");
-			arg.ProcessNewConArg();
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, L"cmd")==0);
-			_ASSERTE(arg.pszUserName==NULL && arg.pszDomain==NULL && arg.ForceUserDialog==crb_On && arg.NewConsole==crb_On && arg.BufHeight==crb_On && arg.nBufHeight==0);
-			break;
-		case 0:
-			arg.pszSpecialCmd = lstrdup(L"cmd \"-new_console:d:C:\\John Doe\\Home\" ");
-			arg.ProcessNewConArg();
-			_ASSERTE(lstrcmp(arg.pszSpecialCmd, L"cmd ")==0);
-			nDbg = lstrcmp(arg.pszStartupDir, L"C:\\John Doe\\Home");
-			_ASSERTE(nDbg==0 && arg.NewConsole==crb_On);
-			break;
-		default:
-			bTest = false; // Stop tests
-		}
-	}
-
-	nDbg = -1;
-}
-#endif
 
 
 // If you add some members - don't forget them in RConStartArgs::AssignFrom!
 RConStartArgsEx::RConStartArgsEx()
 	: RConStartArgs()
 {
-	#if 0
-	hShlwapi = NULL; WcsStrI = NULL;
-	#endif
-
-	// Internal for GUI tab creation
-	cchEnvStrings = 0; pszEnvStrings = NULL;
-	pszTaskName = NULL;
 }
 
 
@@ -324,6 +54,10 @@ RConStartArgsEx::~RConStartArgsEx()
 	SafeFree(this->pszTaskName);
 }
 
+RConStartArgsEx::RConStartArgsEx(const RConStartArgsEx& args)
+{
+	AssignFrom(args);
+}
 
 bool RConStartArgsEx::AssignFrom(const RConStartArgsEx& args, bool abConcat /*= false*/)
 {
@@ -332,15 +66,15 @@ bool RConStartArgsEx::AssignFrom(const RConStartArgsEx& args, bool abConcat /*= 
 		SafeFree(this->pszSpecialCmd);
 
 		//_ASSERTE(args.bDetached == FALSE); -- Allowed. While duplicating root.
-		this->pszSpecialCmd = lstrdup(args.pszSpecialCmd);
+		this->pszSpecialCmd = lstrdup(args.pszSpecialCmd).Detach();
 
 		if (!this->pszSpecialCmd)
 			return false;
 	}
 
-	// Директория запуска. В большинстве случаев совпадает с CurDir в conemu.exe,
-	// но может быть задана из консоли, если запуск идет через "-new_console"
-	_ASSERTE(this->pszStartupDir==NULL);
+	// Startup directory. In most cases it's the same as CurDir in ConEmu.exe,
+	// but it could be set from the console, if we run the command via "-new_console"
+	_ASSERTE(this->pszStartupDir==nullptr);
 
 	struct CopyValues { wchar_t** ppDst; LPCWSTR pSrc; } values[] =
 	{
@@ -351,19 +85,18 @@ bool RConStartArgsEx::AssignFrom(const RConStartArgsEx& args, bool abConcat /*= 
 		{&this->pszWallpaper, args.pszWallpaper},
 		{&this->pszMntRoot, args.pszMntRoot},
 		{&this->pszAnsiLog, args.pszAnsiLog},
-		{NULL}
 	};
 
-	for (CopyValues* p = values; p->ppDst; p++)
+	for (auto& p : values)
 	{
-		if (abConcat && *p->ppDst && !p->pSrc)
+		if (abConcat && *p.ppDst && !p.pSrc)
 			continue;
 
-		SafeFree(*p->ppDst);
-		if (p->pSrc)
+		SafeFree(*p.ppDst);
+		if (p.pSrc)
 		{
-			*p->ppDst = lstrdup(p->pSrc);
-			if (!*p->ppDst)
+			*p.ppDst = lstrdup(p.pSrc).Detach();
+			if (!*p.ppDst)
 				return false;
 		}
 	}
@@ -373,10 +106,10 @@ bool RConStartArgsEx::AssignFrom(const RConStartArgsEx& args, bool abConcat /*= 
 		return false;
 	}
 
-	if (!abConcat || args.BackgroundTab || args.ForegroungTab)
+	if (!abConcat || args.BackgroundTab || args.ForegroundTab)
 	{
 		this->BackgroundTab = args.BackgroundTab;
-		this->ForegroungTab = args.ForegroungTab;
+		this->ForegroundTab = args.ForegroundTab;
 	}
 	if (!abConcat || args.NoDefaultTerm)
 	{
@@ -416,8 +149,8 @@ bool RConStartArgsEx::AssignFrom(const RConStartArgsEx& args, bool abConcat /*= 
 	this->cchEnvStrings = args.cchEnvStrings;
 	if (args.cchEnvStrings && args.pszEnvStrings)
 	{
-		size_t cbBytes = args.cchEnvStrings * sizeof(*this->pszEnvStrings);
-		this->pszEnvStrings = (wchar_t*)malloc(cbBytes);
+		const size_t cbBytes = args.cchEnvStrings * sizeof(*this->pszEnvStrings);
+		this->pszEnvStrings = static_cast<wchar_t*>(malloc(cbBytes));
 		if (this->pszEnvStrings)
 		{
 			memmove(this->pszEnvStrings, args.pszEnvStrings, cbBytes);
@@ -426,7 +159,7 @@ bool RConStartArgsEx::AssignFrom(const RConStartArgsEx& args, bool abConcat /*= 
 	// Task name
 	SafeFree(this->pszTaskName);
 	if (args.pszTaskName && *args.pszTaskName)
-		this->pszTaskName = lstrdup(args.pszTaskName);
+		this->pszTaskName = lstrdup(args.pszTaskName).Detach();
 
 	return true;
 }
@@ -451,9 +184,9 @@ bool RConStartArgsEx::AssignPermissionsArgs(const RConStartArgsEx& args, bool ab
 
 	if (args.pszUserName)
 	{
-		this->pszUserName = lstrdup(args.pszUserName);
+		this->pszUserName = lstrdup(args.pszUserName).Detach();
 		if (args.pszDomain)
-			this->pszDomain = lstrdup(args.pszDomain);
+			this->pszDomain = lstrdup(args.pszDomain).Detach();
 		lstrcpy(this->szUserPassword, args.szUserPassword);
 		this->UseEmptyPassword = args.UseEmptyPassword;
 
@@ -474,11 +207,11 @@ bool RConStartArgsEx::HasPermissionsArgs() const
 }
 
 
-wchar_t* RConStartArgsEx::CreateCommandLine(bool abForTasks /*= false*/) const
+CEStr RConStartArgsEx::CreateCommandLine(bool abForTasks) const
 {
-	wchar_t* pszFull = NULL;
+	CEStr result;
 	size_t cchMaxLen =
-				 (pszSpecialCmd ? (lstrlen(pszSpecialCmd) + 3) : 0); // только команда
+				 (pszSpecialCmd ? (lstrlen(pszSpecialCmd) + 3) : 0); // the command
 	cchMaxLen += (pszStartupDir ? (lstrlen(pszStartupDir) + 20) : 0); // "-new_console:d:..."
 	cchMaxLen += (pszIconFile   ? (lstrlen(pszIconFile) + 20) : 0); // "-new_console:C:..."
 	cchMaxLen += (pszWallpaper  ? (lstrlen(pszWallpaper) + 20) : 0); // "-new_console:W:..."
@@ -494,10 +227,10 @@ wchar_t* RConStartArgsEx::CreateCommandLine(bool abForTasks /*= false*/) const
 	if (RunAsNetOnly == crb_On) cchMaxLen++; // -new_console:e
 	cchMaxLen += (pszUserName ? (lstrlen(pszUserName) + 32 // "-new_console:u:<user>:<pwd>"
 						+ (pszDomain ? lstrlen(pszDomain) : 0)
-						+ (szUserPassword ? lstrlen(szUserPassword) : 0)) : 0);
+						+ wcslen(szUserPassword)) : 0);
 	if (ForceUserDialog == crb_On) cchMaxLen++; // -new_console:u
 	if (BackgroundTab == crb_On) cchMaxLen++; // -new_console:b
-	if (ForegroungTab == crb_On) cchMaxLen++; // -new_console:f
+	if (ForegroundTab == crb_On) cchMaxLen++; // -new_console:f
 	if (BufHeight == crb_On) cchMaxLen += 32; // -new_console:h<lines>
 	if (LongOutputDisable == crb_On) cchMaxLen++; // -new_console:o
 	if (OverwriteMode != crb_Off) cchMaxLen += 2; // -new_console:w[0|1]
@@ -510,17 +243,18 @@ wchar_t* RConStartArgsEx::CreateCommandLine(bool abForTasks /*= false*/) const
 	if (ForceInherit == crb_On) cchMaxLen++; // -new_console:I
 	if (eSplit) cchMaxLen += 64; // -new_console:s[<SplitTab>T][<Percents>](H|V)
 
-	pszFull = (wchar_t*)malloc(cchMaxLen*sizeof(*pszFull));
+	auto* pszFull = result.GetBuffer(cchMaxLen);
 	if (!pszFull)
 	{
-		_ASSERTE(pszFull!=NULL);
-		return NULL;
+		_ASSERTE(pszFull!=nullptr);
+		return {};
 	}
 
 	if (pszSpecialCmd && (RunAsAdministrator == crb_On) && abForTasks)
 		_wcscpy_c(pszFull, cchMaxLen, L"* "); // `-new_console` will follow asterisk, so add a space to delimit
 	else
 		*pszFull = 0;
+
 
 	wchar_t szAdd[128] = L"";
 	if (RunAsAdministrator == crb_On)
@@ -549,7 +283,7 @@ wchar_t* RConStartArgsEx::CreateCommandLine(bool abForTasks /*= false*/) const
 
 	if (BackgroundTab == crb_On)
 		wcscat_c(szAdd, L"b");
-	else if (ForegroungTab == crb_On)
+	else if (ForegroundTab == crb_On)
 		wcscat_c(szAdd, L"f");
 
 	if (ForceDosBox == crb_On)
@@ -610,7 +344,7 @@ wchar_t* RConStartArgsEx::CreateCommandLine(bool abForTasks /*= false*/) const
 			msprintf(szAdd+lstrlen(szAdd), 16, L"%uT", nSplitPane);
 		if (nSplitValue > 0 && nSplitValue < 1000)
 		{
-			UINT iPercent = (1000-nSplitValue)/10;
+			const UINT iPercent = (1000 - nSplitValue) / 10;
 			msprintf(szAdd+lstrlen(szAdd), 16, L"%u", std::max<UINT>(1, std::min<UINT>(iPercent, 99)));
 		}
 		wcscat_c(szAdd, (eSplit == eSplitHorz) ? L"H" : L"V");
@@ -637,7 +371,7 @@ wchar_t* RConStartArgsEx::CreateCommandLine(bool abForTasks /*= false*/) const
 		{L'W', false, this->pszWallpaper},
 		{L'm', false, this->pszMntRoot},
 		{L'L', false, this->pszAnsiLog},
-		{0}
+		{}
 	};
 
 	wchar_t szCat[32];
@@ -645,7 +379,7 @@ wchar_t* RConStartArgsEx::CreateCommandLine(bool abForTasks /*= false*/) const
 	{
 		if (p->pVal)
 		{
-			bool bQuot = !*p->pVal || (wcspbrk(p->pVal, L" \"") != NULL);
+			const bool bQuot = !*p->pVal || (wcspbrk(p->pVal, L" \"") != nullptr);
 
 			if (bQuot)
 				msprintf(szCat, countof(szCat), (NewConsole == crb_On) ? L"-new_console:%c:\"" : L"-cur_console:%c:\"", p->cOpt);
@@ -697,18 +431,20 @@ wchar_t* RConStartArgsEx::CreateCommandLine(bool abForTasks /*= false*/) const
 		_wcscat_c(pszFull, cchMaxLen, L"\" ");
 	}
 
+	// See the note above, why we add the command after "-new_console" switches
+	// User may modify the command appropriately afterwards
 	if (pszSpecialCmd)
 	{
-		// Не окавычиваем. Этим должен озаботиться пользователь
+		// Don't quotate, the command is up to user
 		_wcscat_c(pszFull, cchMaxLen, pszSpecialCmd);
 	}
 
-	//131008 - лишние пробелы не нужны
+	// Trim trailing spaces
 	wchar_t* pS = pszFull + lstrlen(pszFull);
 	while ((pS > pszFull) && wcschr(L" \t\r\n", *(pS - 1)))
 		*(--pS) = 0;
 
-	return pszFull;
+	return result;
 }
 
 
@@ -717,7 +453,7 @@ bool RConStartArgsEx::CheckUserToken(HWND hPwd)
 	//SafeFree(pszUserProfile);
 	UseEmptyPassword = crb_Undefined;
 
-	//if (hLogonToken) { CloseHandle(hLogonToken); hLogonToken = NULL; }
+	//if (hLogonToken) { CloseHandle(hLogonToken); hLogonToken = nullptr; }
 	if (!pszUserName || !*pszUserName)
 		return FALSE;
 
@@ -740,11 +476,11 @@ bool RConStartArgsEx::CheckUserToken(HWND hPwd)
 	{
 		pszDomain = pszUserName;
 		*pszSlash = 0;
-		pszUserName = lstrdup(pszSlash+1);
+		pszUserName = lstrdup(pszSlash + 1).Detach();
 	}
 
 	HANDLE hLogonToken = CheckUserToken();
-	bool bIsValid = (hLogonToken != NULL);
+	const bool bIsValid = (hLogonToken != nullptr);
 	// Token itself is not needed now
 	SafeCloseHandle(hLogonToken);
 
@@ -754,18 +490,18 @@ bool RConStartArgsEx::CheckUserToken(HWND hPwd)
 
 HANDLE RConStartArgsEx::CheckUserToken()
 {
-	HANDLE hLogonToken = NULL;
-	// Empty password? Really? Security hole? Are you sure?
+	HANDLE hLogonToken = nullptr;
 	// aka: code 1327 (ERROR_ACCOUNT_RESTRICTION)
+	// If user needs to use empty password (THINK TWICE! It's a security hole!)
 	// gpedit.msc - Конфигурация компьютера - Конфигурация Windows - Локальные политики - Параметры безопасности - Учетные записи
-	// Ограничить использование пустых паролей только для консольного входа -> "Отключить". 
-	LPWSTR pszPassword = (UseEmptyPassword == crb_On) ? NULL : szUserPassword;
-	DWORD nFlags = (RunAsNetOnly == crb_On) ? LOGON32_LOGON_NEW_CREDENTIALS : LOGON32_LOGON_INTERACTIVE;
-	BOOL lbRc = LogonUser(pszUserName, pszDomain, pszPassword, nFlags, LOGON32_PROVIDER_DEFAULT, &hLogonToken);
+	// Ограничить использование пустых паролей только для консольного входа -> "Отключить".
+	const auto* pszPassword = (UseEmptyPassword == crb_On) ? nullptr : szUserPassword;
+	const DWORD nFlags = (RunAsNetOnly == crb_On) ? LOGON32_LOGON_NEW_CREDENTIALS : LOGON32_LOGON_INTERACTIVE;
+	const BOOL lbRc = LogonUser(pszUserName, pszDomain, pszPassword, nFlags, LOGON32_PROVIDER_DEFAULT, &hLogonToken);
 
 	if (!lbRc || !hLogonToken)
 	{
-		return NULL;
+		return nullptr;
 	}
 
 	return hLogonToken;

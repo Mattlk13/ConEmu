@@ -29,7 +29,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <mutex>
-#include "../common/ConsoleMixAttr.h"
 #include "../common/MPipe.h"
 #include "../common/WCodePage.h"
 #include "../common/WThreads.h"
@@ -69,11 +68,12 @@ protected:
 	condata::Table* GetTable(GetTableEnum _table);
 	CESERVER_CONSOLE_MAPPING_HDR* GetConMap() const;
 	bool IsCmdProcess() const;
-	static void BellBallback(void* param);
+	static void BellCallback(void* param);
 
 private:
-	static SrvAnsi* object;
-	static std::mutex object_mutex;
+	// Singleton
+	static SrvAnsi* object_;
+	static std::mutex& GetObjectMutex();
 
 	/// Console processors
 	std::mutex m_UseMutex;
@@ -108,7 +108,7 @@ protected:
 	};
 	struct CpConv gCpConv = {};
 
-	bool gbWasXTermOutput = false;
+	bool gbIsXTermOutput = false;
 	struct TermModeSet {
 		DWORD value, pid;
 	} gWasXTermModeSet[tmc_Last] = {};
@@ -152,23 +152,24 @@ protected:
 	struct DisplayCursorPos
 	{
 		// Internal
-		bool bCursorPosStored;
-		condata::Coord StoredCursorPos;
+		bool bCursorPosStored{ false };
+		condata::Coord StoredCursorPos{};
 		// ESC[?1h 	Set cursor key to application 	DECCKM
 		// ESC[?1l 	Set cursor key to cursor 	DECCKM
-		bool CursorKeysApp; // "?1h"
+		bool CursorKeysApp{ false }; // "?1h"
 	}; // gDisplayCursor = {};
 
 	DisplayCursorPos gDisplayCursor = {};
 
+	// #condata replace or forward with m_Table calls, e.g. SetAutoCRLF instead of AutoLfNl
 	struct DisplayOpt
 	{
-		BOOL  WrapWasSet;
-		SHORT WrapAt; // Rightmost X coord (1-based)
+		BOOL  WrapWasSet = FALSE;
+		SHORT WrapAt = 0; // Rightmost X coord (1-based)
+		// #condata implement set (automatically on startup?)
+		BOOL  AutoLfNl = FALSE; // LF/NL (default on for Windows, off for XTerm): Automatically follow echo of LF, VT or FF with CR.
 		//
-		BOOL  AutoLfNl; // LF/NL (default off): Automatically follow echo of LF, VT or FF with CR.
-		//
-		BOOL  ShowRawAnsi; // \e[3h display ANSI control characters (TRUE), \e[3l process ANSI (FALSE, normal mode)
+		BOOL  ShowRawAnsi = FALSE; // \e[3h display ANSI control characters (TRUE), \e[3l process ANSI (FALSE, normal mode)
 	}; // gDisplayOpt;
 
 	DisplayOpt gDisplayOpt = {};
@@ -257,6 +258,17 @@ protected:
 	condata::Attribute GetDefaultAttr() const;
 
 	void ChangeTermMode(TermModeCommand mode, DWORD value, DWORD nPID = 0);
+	/// <summary>
+	/// Turn on/off xterm mode for both output and input.
+	/// May be triggered by connector, official Vim builds, ENABLE_VIRTUAL_TERMINAL_INPUT, "ESC ] 9 ; 10 ; 1 ST", etc.
+	/// </summary>
+	/// <param name="bStart">true - start xterm mode, false - stop</param>
 	void StartXTermMode(bool bStart);
+	/// <summary>
+	/// Turn on/off xterm mode only for output (especially for line feeding mode).
+	/// Triggered by ENABLE_VIRTUAL_TERMINAL_PROCESSING.
+	/// </summary>
+	/// <param name="bStart">true - start xterm mode, false - stop</param>
+	void StartXTermOutput(bool bStart);
 	void RefreshXTermModes();
 };

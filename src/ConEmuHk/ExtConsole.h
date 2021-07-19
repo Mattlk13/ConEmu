@@ -32,32 +32,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/pluginW1900.hpp"
 
 #include "../common/ConsoleTrueMod.h"
-//typedef unsigned __int64 CECOLORFLAGS;
-//static const CECOLORFLAGS
-//	CECF_FG_24BIT      = 0x0000000000000001ULL,
-//	CECF_BG_24BIT      = 0x0000000000000002ULL,
-//	CECF_24BITMASK     = CECF_FG_24BIT|CECF_BG_24BIT,
-//
-//	CECF_FG_BOLD       = 0x1000000000000000ULL,
-//	CECF_FG_ITALIC     = 0x2000000000000000ULL,
-//	CECF_FG_UNDERLINE  = 0x4000000000000000ULL,
-//	CECF_STYLEMASK     = CECF_FG_BOLD|CECF_FG_ITALIC|CECF_FG_UNDERLINE,
-//
-//	CECF_NONE          = 0;
-//
-//struct ConEmuColor
-//{
-//	CECOLORFLAGS Flags;
-//	COLORREF ForegroundColor;
-//	COLORREF BackgroundColor;
-//};
-
 
 struct ExtAttributesParm
 {
 	size_t StructSize;
 	HANDLE ConsoleOutput;
-	ConEmuColor Attributes;
+	ConEmu::Color Attributes;
 };
 
 BOOL ExtGetAttributes(ExtAttributesParm* Info);
@@ -81,7 +61,7 @@ static const EXTREADWRITEFLAGS
 
 	ewtf_Commit  = 0x0000000000000100ULL, // Only for Write functions
 
-	ewtf_NoBells = 0x0000000000000200ULL, // CECF_SuppressBells
+	ewtf_NoBells = 0x0000000000000200ULL, // ConEmu::ConsoleFlags::SuppressBells
 
 	ewtf_NoLfNl  = 0x0000000000000400ULL, // Don't do automatic CR after LF
 
@@ -95,7 +75,7 @@ struct ExtWriteTextParm
 	union
 	{
 		FarColor FARColor;
-		ConEmuColor CEColor;
+		ConEmu::Color CEColor;
 		AnnotationInfo AIColor;
 	};
 	const wchar_t* Buffer;
@@ -118,7 +98,7 @@ union ConEmuCharBuffer
 		CHAR_INFO* CEBuffer;
 		union
 		{
-			ConEmuColor* CEColor;
+			ConEmu::Color* CEColor;
 			AnnotationInfo* AIColor;
 		};
 	};
@@ -177,7 +157,7 @@ struct ExtFillOutputParm
 	EXTFILLOUTPUTFLAGS Flags;
 	HANDLE ConsoleOutput;
 	// Fill region with
-	ConEmuColor FillAttr;
+	ConEmu::Color FillAttr;
 	wchar_t FillChar;
 	// Where
 	COORD Coord;
@@ -188,7 +168,6 @@ BOOL ExtFillOutput(ExtFillOutputParm* Info);
 
 typedef unsigned __int64 EXTSCROLLSCREENFLAGS;
 static const EXTSCROLLSCREENFLAGS
-	essf_Pad      = 0x0000000000000001ULL, // pad with spaces to right edge first
 	essf_ExtOnly  = 0x0000000000000002ULL, // scroll extended attrs only (don't touch real console text/attr)
 
 	essf_Current  = 0x0000000000000010ULL, // Use current color (may be extended) selected in console
@@ -210,7 +189,7 @@ struct ExtScrollScreenParm
 	INT_PTR Dir;
 
 	// Fill regions with
-	ConEmuColor FillAttr;
+	ConEmu::Color FillAttr;
 	wchar_t FillChar;
 
 	// essf_Region

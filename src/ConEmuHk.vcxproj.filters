@@ -39,6 +39,9 @@
     <ClInclude Include="ConEmuHk\Ansi.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="ConEmuHk\AsyncCmdQueue.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="ConEmuHk\ConEmuHooks.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -49,6 +52,9 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmuHk\DefTermHk.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="ConEmuHk\DllOptions.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="ConEmuHk\ExtConsole.h">
@@ -155,6 +161,9 @@
     <ClCompile Include="ConEmuHk\Ansi.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="ConEmuHk\AsyncCmdQueue.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="ConEmuHk\ConEmuHooks.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
@@ -162,6 +171,9 @@
       <Filter>Connector</Filter>
     </ClCompile>
     <ClCompile Include="ConEmuHk\DefTermHk.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="ConEmuHk\DllOptions.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="ConEmuHk\Entry.cpp">

@@ -63,13 +63,34 @@ enum CmdOnCreateType
 // 1 -- NO ConEmu (simple console mode)
 int ConEmuCheck(HWND* ahConEmuWnd);
 
+// Parameter for GetConEmuHWND
+enum class ConEmuWndType
+{
+	// Gui console DC window
+	GuiDcWindow = 0,
+	// Gui Main window
+	GuiMainWindow = 1,
+	// RealConsole window
+	ConsoleWindow = 2,
+	// Dedicated VCon window responsible for padding around GuiDcWindow
+	GuiBackWindow = 3,
+};
 
-// Returns HWND of ...
-//  aiType==0: Gui console DC window
-//        ==1: Gui Main window
-//        ==2: Console window
-//        ==3: Back window
-HWND GetConEmuHWND(int aiType);
+/// @brief Returns HWND of requested type from current console/process
+/// @param aiType value from enum ConEmuWndType
+/// @return HWND of nullptr
+HWND GetConEmuHWND(ConEmuWndType aiType);
+
+struct ConEmuWindows
+{
+	HWND ConEmuHwnd = nullptr;
+	HWND ConEmuRoot = nullptr;
+	HWND ConEmuBack = nullptr;
+	HWND RealConWnd = nullptr;
+};
+
+ConEmuWindows GetConEmuWindows(HWND realConsole);
+ConEmuWindows GetConEmuWindowsFromEnv();
 
 // RealConsole window
 HWND myGetConsoleWindow();
@@ -79,27 +100,84 @@ HWND myGetConsoleWindow();
 typedef HWND(WINAPI* GetConsoleWindow_T)();
 //extern GetConsoleWindow_T gfGetRealConsoleWindow;
 
-bool isConsoleClass(LPCWSTR asClass);
-bool isConsoleWindow(HWND hWnd);
+bool IsConsoleClass(LPCWSTR asClass);
+bool IsConsoleWindow(HWND hWnd);
+bool IsPseudoConsoleWindow(HWND hWnd);
 
 //LPCWSTR CreatePipeName(wchar_t (&szGuiPipeName)[128], LPCWSTR asFormat, DWORD anValue);
 int GuiMessageBox(HWND hConEmuWndRoot, LPCWSTR asText, LPCWSTR asTitle, int anBtns);
 
-HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], const wchar_t* szModule, DWORD nServerPID = 0, DWORD nTimeout = 0, BOOL Overlapped = FALSE, HANDLE hStop = NULL, BOOL bIgnoreAbsence = FALSE);
+HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], const wchar_t* szModule, DWORD nServerPID = 0, DWORD nTimeout = 0, BOOL Overlapped = FALSE, HANDLE hStop = nullptr, BOOL bIgnoreAbsence = FALSE);
 CESERVER_REQ* ExecuteNewCmd(DWORD nCmd, size_t nSize);
 bool ExecuteNewCmd(CESERVER_REQ* &ppCmd, DWORD &pcbCurMaxSize, DWORD nCmd, size_t nSize);
 void ExecutePrepareCmd(CESERVER_REQ* pIn, DWORD nCmd, size_t cbSize);
 void ExecutePrepareCmd(CESERVER_REQ_HDR* pHdr, DWORD nCmd, size_t cbSize);
 CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, CESERVER_REQ* pIn, HWND hOwner, BOOL bAsyncNoResult = FALSE);
-CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, DWORD nCmd, size_t cbDataSize, LPBYTE data, HWND hOwner, BOOL bAsyncNoResult = FALSE);
+CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, DWORD nCmd, size_t cbDataSize, const BYTE* data, HWND hOwner, BOOL bAsyncNoResult = FALSE);
 CESERVER_REQ* ExecuteSrvCmd(DWORD dwSrvPID, CESERVER_REQ* pIn, HWND hOwner, BOOL bAsyncNoResult = FALSE, DWORD nTimeout = 0, BOOL bIgnoreAbsence = FALSE);
-CESERVER_REQ* ExecuteSrvCmd(DWORD dwSrvPID, DWORD nCmd, size_t cbDataSize, LPBYTE data, HWND hOwner, BOOL bAsyncNoResult = FALSE);
+CESERVER_REQ* ExecuteSrvCmd(DWORD dwSrvPID, DWORD nCmd, size_t cbDataSize, const BYTE* data, HWND hOwner, BOOL bAsyncNoResult = FALSE);
 CESERVER_REQ* ExecuteHkCmd(DWORD dwHkPID, CESERVER_REQ* pIn, HWND hOwner, BOOL bAsyncNoResult = FALSE, BOOL bIgnoreAbsence = FALSE);
 CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, CESERVER_REQ* pIn, DWORD nWaitPipe, HWND hOwner, BOOL bAsyncNoResult = FALSE, DWORD nServerPID = 0, BOOL bIgnoreAbsence = FALSE);
 void ExecuteFreeResult(CESERVER_REQ* &pOut);
 
-bool AllocateSendCurrentDirectory(CESERVER_REQ* &ppCmd, DWORD &pcbCurMaxSize, LPCWSTR asDirectory, LPCWSTR asPassiveDirectory = NULL);
-void SendCurrentDirectory(HWND hConWnd, LPCWSTR asDirectory, LPCWSTR asPassiveDirectory = NULL);
+
+class ConEmuRpc
+{
+public:
+	ConEmuRpc();
+	~ConEmuRpc();
+
+	ConEmuRpc(const ConEmuRpc&) = delete;
+	ConEmuRpc(ConEmuRpc&&) = delete;
+	ConEmuRpc& operator=(const ConEmuRpc&) = delete;
+	ConEmuRpc& operator=(ConEmuRpc&&) = delete;
+
+	ConEmuRpc& SetStopHandle(HANDLE ahStop);
+	ConEmuRpc& SetOwner(HWND ahOwner);
+	ConEmuRpc& SetModuleName(const wchar_t* asModule);
+	ConEmuRpc& SetAsyncNoResult(bool abAsyncNoResult = true);
+	ConEmuRpc& SetOverlapped(bool abOverlapped = true);
+	ConEmuRpc& SetIgnoreAbsence(bool abIgnoreAbsence = true);
+	ConEmuRpc& SetTimeout(DWORD anTimeoutMs);
+
+	CESERVER_REQ* Execute(CESERVER_REQ* pIn) const;
+	CESERVER_REQ* Execute(CECMD nCmd, const void* data, size_t cbDataSize) const;
+
+	LPCWSTR GetErrorText() const;
+	
+protected:
+	DWORD nPreLastError = 0;
+	
+	DWORD nServerPID = 0;
+	wchar_t szPipeName[MAX_PATH];
+	mutable wchar_t szError[MAX_PATH * 2];
+
+	HANDLE hStop = nullptr;
+	HWND hOwner = nullptr;
+	const wchar_t* szModule = nullptr;
+	bool bAsyncNoResult = false;
+	bool bOverlapped = false;
+	bool bIgnoreAbsence = false;
+	DWORD nTimeoutMs = 1000;
+};
+
+class ConEmuGuiRpc : public ConEmuRpc
+{
+public:
+	ConEmuGuiRpc(HWND ahConWnd);
+	~ConEmuGuiRpc();
+
+	ConEmuGuiRpc(const ConEmuGuiRpc&) = delete;
+	ConEmuGuiRpc(ConEmuGuiRpc&&) = delete;
+	ConEmuGuiRpc& operator=(const ConEmuGuiRpc&) = delete;
+	ConEmuGuiRpc& operator=(ConEmuGuiRpc&&) = delete;
+
+protected:
+	const HWND hConWnd = nullptr;
+};
+
+bool AllocateSendCurrentDirectory(CESERVER_REQ* &ppCmd, DWORD &pcbCurMaxSize, LPCWSTR asDirectory, LPCWSTR asPassiveDirectory = nullptr);
+void SendCurrentDirectory(HWND hConWnd, LPCWSTR asDirectory, LPCWSTR asPassiveDirectory = nullptr);
 
 BOOL LoadSrvMapping(HWND hConWnd, CESERVER_CONSOLE_MAPPING_HDR& SrvMapping);
 BOOL LoadGuiMapping(DWORD nConEmuPID, ConEmuGuiMapping& GuiMapping);

@@ -40,7 +40,7 @@ int EvaluateDefaultFontWidth(int inSizeY, const wchar_t *asFontName)
 
 	int nDefaultX = inSizeY * 10 / 16; // rough
 	LOGFONT lf = {inSizeY};
-	lstrcpyn(lf.lfFaceName, asFontName ? asFontName : L"Lucida Console", countof(lf.lfFaceName));
+	lstrcpyn(lf.lfFaceName, asFontName ? asFontName : DEFAULT_CONSOLE_FONT_NAME, countof(lf.lfFaceName));
 	HFONT hFont = CreateFontIndirect(&lf);
 	if (hFont)
 	{
@@ -65,14 +65,13 @@ int EvaluateDefaultFontWidth(int inSizeY, const wchar_t *asFontName)
 
 void SetUserFriendlyFont(HWND hConWnd, int newFontY = 0, int newFontX = 0)
 {
-	// Соответствующие функции появились только в API Vista
-	// Win2k & WinXP - доступны только хаки, что не подходит
+	// Required function appeared only in Windows Vista API
+	// Win2k & WinXP - only hacks exists, not acceptable
 	_ASSERTE(_WIN32_WINNT_VISTA==0x600);
-	OSVERSIONINFOEXW osvi = {sizeof(osvi), HIBYTE(_WIN32_WINNT_VISTA), LOBYTE(_WIN32_WINNT_VISTA)};
-	DWORDLONG const dwlConditionMask = VerSetConditionMask(VerSetConditionMask(0, VER_MAJORVERSION, VER_GREATER_EQUAL), VER_MINORVERSION, VER_GREATER_EQUAL);
-	if (!_VerifyVersionInfo(&osvi, VER_MAJORVERSION | VER_MINORVERSION, dwlConditionMask))
+	if (!IsWin6())
 		return;
 
+	// ReSharper disable once CppLocalVariableMayBeConst
 	HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
 	COORD crVisibleSize = {};
 	CONSOLE_SCREEN_BUFFER_INFO csbi = {};
@@ -160,7 +159,7 @@ void SetUserFriendlyFont(HWND hConWnd, int newFontY = 0, int newFontX = 0)
 	if ((newFontY > 0) && (newFontX > 0))
 	{
 		if (!*sFontName)
-			lstrcpyn(sFontName, L"Lucida Console", countof(sFontName));
+			lstrcpyn(sFontName, DEFAULT_CONSOLE_FONT_NAME, countof(sFontName));
 		apiSetConsoleFontSize(hOutput, newFontY, newFontX, sFontName);
 	}
 }

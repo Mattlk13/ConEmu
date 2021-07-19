@@ -1,5 +1,4 @@
-﻿
-/*
+﻿/*
 Copyright (c) 2016-present Maximus5
 All rights reserved.
 
@@ -30,28 +29,52 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "defines.h"
 #include "MModule.h"
 
+#include <tuple>
+
 /* LoadLibrary/FreeLibrary/GetProcAddress encapsulation */
 
-MModule::MModule()
-	: mh_Module(NULL)
-	, mb_Loaded(false)
+MModule::MModule() // NOLINT(modernize-use-equals-default)
 {
-	#ifdef _DEBUG
-	ms_Module[0] = 0;
-	#endif
 }
 
-MModule::MModule(LPCWSTR asModule)
-	: mh_Module(NULL)
-	, mb_Loaded(false)
+MModule::MModule(const wchar_t* asModule)
 {
 	Load(asModule);
 }
 
-MModule::MModule(HMODULE ahModule)
-	: mh_Module(ahModule)
-	, mb_Loaded(false)
+MModule::MModule(const HMODULE ahModule)
+	: moduleHandle_(ahModule)
 {
+	_ASSERTE(selfLoaded_ == false);
+}
+
+MModule::MModule(MModule&& src) noexcept
+{
+	moduleHandle_ = src.moduleHandle_;
+	#ifdef _DEBUG
+	wcscpy_s(moduleName_, src.moduleName_);
+	#endif
+	selfLoaded_ = src.selfLoaded_;
+	src.selfLoaded_ = false;
+}
+
+MModule& MModule::operator=(MModule&& src) noexcept
+{
+	if (moduleHandle_ == src.moduleHandle_)
+	{
+		_ASSERTE((moduleHandle_ == nullptr) && "Already has this HMODULE");
+		return *this;
+	}
+	
+	Free();
+
+	moduleHandle_ = src.moduleHandle_;
+	#ifdef _DEBUG
+	wcscpy_s(moduleName_, src.moduleName_);
+	#endif
+	selfLoaded_ = src.selfLoaded_;
+	src.selfLoaded_ = false;
+	return *this;
 }
 
 MModule::~MModule()
@@ -59,38 +82,69 @@ MModule::~MModule()
 	Free();
 }
 
-HMODULE MModule::Load(LPCWSTR asModule)
+HMODULE MModule::Load(const wchar_t* asModule)
 {
+	_ASSERTE(moduleHandle_ == nullptr && !selfLoaded_);
+
 	Free(); // JIC
 
-	_ASSERTE(mh_Module==NULL && !mb_Loaded);
-
 	#ifdef _DEBUG
-	lstrcpyn(ms_Module, asModule ? asModule : L"", countof(ms_Module));
+	std::ignore = lstrcpyn(moduleName_, asModule ? asModule : L"", countof(moduleName_));
 	#endif
 
-	mh_Module = LoadLibrary(asModule);
-	mb_Loaded = (mh_Module != NULL);
-	return mh_Module;
+	if (!asModule || !*asModule)
+	{
+		_ASSERTE(asModule && *asModule);
+		return nullptr;
+	}
+
+	moduleHandle_ = LoadLibraryW(asModule);
+	selfLoaded_ = (moduleHandle_ != nullptr);
+	lastError_ = selfLoaded_ ? 0 : GetLastError();
+	return moduleHandle_;
+}
+
+bool MModule::SetHandle(HMODULE hModule)
+{
+	_ASSERTE(moduleHandle_ == nullptr && !selfLoaded_);
+
+	Free(); // JIC
+
+	moduleHandle_ = hModule;
+	selfLoaded_ = false;
+
+	return IsValid();
 }
 
 void MModule::Free()
 {
-	if (mb_Loaded && mh_Module)
+	if (selfLoaded_ && moduleHandle_)
 	{
-		HMODULE hLib = mh_Module;
-		mh_Module = NULL;
+		// ReSharper disable once CppLocalVariableMayBeConst
+		HMODULE hLib = moduleHandle_;
+		moduleHandle_ = nullptr;
 		FreeLibrary(hLib);
+		lastError_ = GetLastError();
 	}
 
-	mh_Module = NULL;
-	#ifdef _DEBUG
-	ms_Module[0] = 0;
-	#endif
-	mb_Loaded = false;
+	moduleHandle_ = nullptr;
+#ifdef _DEBUG
+	moduleName_[0] = L'\0';
+#endif
+	selfLoaded_ = false;
 }
 
-MModule::operator HMODULE()
+MModule::operator HMODULE() const
 {
-	return mh_Module;
+	return moduleHandle_;
+}
+
+bool MModule::operator!() const
+{
+	return !IsValid();
+}
+
+bool MModule::IsValid() const
+{
+	return (moduleHandle_ != nullptr && moduleHandle_ != INVALID_HANDLE_VALUE);
 }

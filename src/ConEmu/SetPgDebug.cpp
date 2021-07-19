@@ -203,9 +203,9 @@ void CSetPgDebug::debugLogShell(DWORD nParentPID, CESERVER_REQ_ONCREATEPROCESS* 
 	shl->nParentPID = nParentPID;
 	shl->nParentBits = pInfo->nSourceBits;
 	wcscpy_c(shl->szFunction, pInfo->sFunction);
-	shl->pszAction = lstrdup(pInfo->wsValue);
-	shl->pszFile   = lstrdup(pszFile);
-	shl->pszParam  = lstrdup(pszParam);
+	shl->pszAction = lstrdup(pInfo->wsValue).Detach();
+	shl->pszFile   = lstrdup(pszFile).Detach();
+	shl->pszParam  = lstrdup(pszParam).Detach();
 	shl->bDos = (pInfo->nImageBits == 16) && (pInfo->nImageSubsystem == IMAGE_SUBSYSTEM_DOS_EXECUTABLE);
 	shl->nImageBits = pInfo->nImageBits;
 	shl->nImageSubsystem = pInfo->nImageSubsystem;
@@ -219,19 +219,18 @@ void CSetPgDebug::debugLogShell(DWORD nParentPID, CESERVER_REQ_ONCREATEPROCESS* 
 
 	// Append directory and bat/tmp files contents to pszParam
 	{
-		LPCWSTR pszDir = (pInfo->wsValue+pInfo->nActionLen+pInfo->nFileLen+pInfo->nParamLen);
-		LPCWSTR pszAppFile = NULL;
-		wchar_t*& pszParamEx = shl->pszParam;
+		const wchar_t* pszDir = (pInfo->wsValue + pInfo->nActionLen + pInfo->nFileLen + pInfo->nParamLen);
+		LPCWSTR pszAppFile = nullptr;
+		CEStr pszParamEx(shl->pszParam);
 
 		if (pszDir && *pszDir)
 		{
-			CEStr lsDir((pszParamEx && *pszParamEx) ? L"\r\n\r\n" : NULL, L"CD: \"", pszDir, L"\"");
-			lstrmerge(&pszParamEx, lsDir);
+			pszParamEx.Append(!pszParamEx.IsEmpty() ? L"\r\n\r\n" : nullptr, L"CD: \"", pszDir, L"\"");
 		}
 
 		if (shl->pszFile)
 		{
-			LPCWSTR pszExt = PointToExt(shl->pszFile);
+			const wchar_t* pszExt = PointToExt(shl->pszFile);
 			if (pszExt && (!lstrcmpi(pszExt, L".bat") || !lstrcmpi(pszExt, L".cmd")))
 				debugLogShellText(pszParamEx, (pszAppFile = shl->pszFile));
 		}
@@ -251,6 +250,33 @@ void CSetPgDebug::debugLogShell(DWORD nParentPID, CESERVER_REQ_ONCREATEPROCESS* 
 					&& (!pszAppFile || (lstrcmpi(szArg, pszAppFile) != 0)))
 				{
 					debugLogShellText(pszParamEx, szArg);
+				}
+				else if ((szArg.Compare(L"@") == 0) && pszNext && (*pszNext == L'"'))
+				{
+					pszNext = NextArg(pszNext, szArg);
+					if (!pszNext)
+						break;
+					if (!*szArg)
+						continue;
+
+					CEStr lsPath;
+
+					if (IsFilePath(szArg, true))
+					{
+						// Full path to "arguments file"
+						lsPath.Set(szArg);
+					}
+					else if ((szArg[0] != L'\\' && szArg[0] != L'/')
+						&& (pszDir && *pszDir))
+					{
+						// Relative path to "arguments file"
+						lsPath = JoinPath(pszDir, szArg);
+					}
+
+					if (!lsPath.IsEmpty())
+					{
+						debugLogShellText(pszParamEx, lsPath);
+					}
 				}
 				else if (szArg[0] == L'@')
 				{
@@ -358,39 +384,25 @@ void CSetPgDebug::debugLogShell(DebugLogShellActivity *pShl)
 	free(pShl);
 }
 
-void CSetPgDebug::debugLogShellText(wchar_t* &pszParamEx, LPCWSTR asFile)
+void CSetPgDebug::debugLogShellText(CEStr& pszParamEx, LPCWSTR asFile)
 {
-	_ASSERTE(pszParamEx!=NULL && asFile && *asFile);
+	_ASSERTE(pszParamEx != nullptr && asFile && *asFile);
 
 	CEStr szBuf;
 	DWORD cchMax = 32*1024/*32 KB*/;
-	DWORD nRead = 0, nErrCode = (DWORD)-1;
+	DWORD nRead = 0, nErrCode = static_cast<DWORD>(-1);
 
 	#ifdef _DEBUG
-	LPCWSTR pszExt = PointToExt(asFile);
+	const wchar_t* pszExt = PointToExt(asFile);
 	bool bCmdBatch = ((lstrcmpi(pszExt, L".bat") == 0) && (lstrcmpi(pszExt, L".cmd") == 0));
 	#endif
 
 	// ReadTextFile will use BOM if it exists
-	UINT nDefCP = CP_OEMCP;
+	const UINT nDefCP = CP_OEMCP;
 
-	if (0 == ReadTextFile(asFile, cchMax, szBuf.ms_Val, nRead, nErrCode, nDefCP))
+	if (0 == ReadTextFile(asFile, cchMax, szBuf, nRead, nErrCode, nDefCP))
 	{
-		size_t nAll = 0;
-		wchar_t* pszNew = NULL;
-
-		nAll = (lstrlen(pszParamEx)+20) + nRead + 1 + 2*lstrlen(asFile);
-		pszNew = (wchar_t*)realloc(pszParamEx, nAll*sizeof(wchar_t));
-		if (pszNew)
-		{
-			_wcscat_c(pszNew, nAll, L"\r\n\r\n>>>");
-			_wcscat_c(pszNew, nAll, asFile);
-			_wcscat_c(pszNew, nAll, L"\r\n");
-			_wcscat_c(pszNew, nAll, szBuf);
-			_wcscat_c(pszNew, nAll, L"\r\n<<<");
-			_wcscat_c(pszNew, nAll, asFile);
-			pszParamEx = pszNew;
-		}
+		pszParamEx.Append(L"\r\n\r\n>>>", asFile, L"\r\n", szBuf, L"\r\n<<<", asFile);
 	}
 }
 
@@ -556,7 +568,7 @@ wrap:
 	free(pInfo);
 }
 
-void CSetPgDebug::debugLogCommand(CESERVER_REQ* pInfo, BOOL abInput, DWORD anTick, DWORD anDur, LPCWSTR asPipe, CESERVER_REQ* pResult/*=NULL*/)
+void CSetPgDebug::debugLogCommand(CESERVER_REQ* pInfo, BOOL abInput, DWORD anTick, DWORD anDur, LPCWSTR asPipe, CESERVER_REQ* pResult/*=nullptr*/)
 {
 	CSetPgDebug* pDbgPg = (CSetPgDebug*)gpSetCls->GetPageObj(thi_Debug);
 	if (!pDbgPg)
@@ -564,7 +576,7 @@ void CSetPgDebug::debugLogCommand(CESERVER_REQ* pInfo, BOOL abInput, DWORD anTic
 	if (pDbgPg->GetActivityLoggingType() != glt_Commands)
 		return;
 
-	_ASSERTE(abInput==TRUE || pResult!=NULL || (pInfo->hdr.nCmd==CECMD_LANGCHANGE || pInfo->hdr.nCmd==CECMD_GUICHANGED || pInfo->hdr.nCmd==CMD_FARSETCHANGED || pInfo->hdr.nCmd==CECMD_ONACTIVATION));
+	_ASSERTE(abInput==TRUE || pResult!=nullptr || (pInfo->hdr.nCmd==CECMD_LANGCHANGE || pInfo->hdr.nCmd==CECMD_GUICHANGED || pInfo->hdr.nCmd==CMD_FARSETCHANGED || pInfo->hdr.nCmd==CECMD_ONACTIVATION));
 
 	LogCommandsData* pData = (LogCommandsData*)calloc(1,sizeof(LogCommandsData));
 
@@ -578,14 +590,14 @@ void CSetPgDebug::debugLogCommand(CESERVER_REQ* pInfo, BOOL abInput, DWORD anTic
 	pData->nCmd = pInfo->hdr.nCmd;
 	pData->nSize = pInfo->hdr.cbSize;
 	pData->nPID = abInput ? pInfo->hdr.nSrcPID : pResult ? pResult->hdr.nSrcPID : 0;
-	LPCWSTR pszName = asPipe ? PointToName(asPipe) : NULL;
+	LPCWSTR pszName = asPipe ? PointToName(asPipe) : nullptr;
 	lstrcpyn(pData->szPipe, pszName ? pszName : L"", countof(pData->szPipe));
 	switch (pInfo->hdr.nCmd)
 	{
 	case CECMD_POSTCONMSG:
 		swprintf_c(pData->szExtra,
 			L"HWND=x%08X, Msg=%u, wParam=" WIN3264TEST(L"x%08X",L"x%08X%08X") L", lParam=" WIN3264TEST(L"x%08X",L"x%08X%08X") L": ",
-			pInfo->Msg.hWnd, pInfo->Msg.nMsg, WIN3264WSPRINT(pInfo->Msg.wParam), WIN3264WSPRINT(pInfo->Msg.lParam));
+			pInfo->Msg.hWnd.GetPortableHandle(), pInfo->Msg.nMsg, WIN3264WSPRINT(pInfo->Msg.wParam), WIN3264WSPRINT(pInfo->Msg.lParam));
 		GetClassName(pInfo->Msg.hWnd, pData->szExtra+lstrlen(pData->szExtra), countof(pData->szExtra)-lstrlen(pData->szExtra));
 		break;
 	case CECMD_NEWCMD:
@@ -740,7 +752,7 @@ void CSetPgDebug::OnSaveActivityLogFile()
 	if (!GetSaveFileName(&ofn))
 		return;
 
-	HANDLE hFile = CreateFile(szLogFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, 0, NULL);
+	HANDLE hFile = CreateFile(szLogFile, GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, 0, nullptr);
 	if (!hFile || hFile == INVALID_HANDLE_VALUE)
 	{
 		DisplayLastError(L"Create log file failed!");
@@ -757,7 +769,7 @@ void CSetPgDebug::OnSaveActivityLogFile()
 	for (;;nColumnCount++)
 	{
 		if (nColumnCount)
-			WriteFile(hFile, L";", 2, &nWritten, NULL);
+			WriteFile(hFile, L";", 2, &nWritten, nullptr);
 
 		lvc.pszText = pszText;
 		lvc.cchTextMax = nMaxText;
@@ -766,9 +778,9 @@ void CSetPgDebug::OnSaveActivityLogFile()
 
 		nLen = _tcslen(pszText)*2;
 		if (nLen)
-			WriteFile(hFile, pszText, nLen, &nWritten, NULL);
+			WriteFile(hFile, pszText, nLen, &nWritten, nullptr);
 	}
-	WriteFile(hFile, L"\r\n", 2*sizeof(wchar_t), &nWritten, NULL); //-V112
+	WriteFile(hFile, L"\r\n", 2*sizeof(wchar_t), &nWritten, nullptr); //-V112
 
 	if (nColumnCount > 0)
 	{
@@ -778,14 +790,14 @@ void CSetPgDebug::OnSaveActivityLogFile()
 			for (int c = 0; c < nColumnCount; c++)
 			{
 				if (c)
-					WriteFile(hFile, L";", 2, &nWritten, NULL);
+					WriteFile(hFile, L";", 2, &nWritten, nullptr);
 				pszText[0] = 0;
 				ListView_GetItemText(hListView, i, c, pszText, nMaxText);
 				nLen = _tcslen(pszText)*2;
 				if (nLen)
-					WriteFile(hFile, pszText, nLen, &nWritten, NULL);
+					WriteFile(hFile, pszText, nLen, &nWritten, nullptr);
 			}
-			WriteFile(hFile, L"\r\n", 2*sizeof(wchar_t), &nWritten, NULL); //-V112
+			WriteFile(hFile, L"\r\n", 2*sizeof(wchar_t), &nWritten, nullptr); //-V112
 		}
 	}
 

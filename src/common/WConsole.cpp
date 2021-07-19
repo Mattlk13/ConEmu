@@ -28,9 +28,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define HIDE_USE_EXCEPTION_INFO
 #include "Common.h"
+#include "ConEmuCheck.h"
 #include "MProcess.h"
-#include "CmdLine.h"
-#include "Monitors.h"
 #include "WConsole.h"
 #include "WObjects.h"
 
@@ -138,7 +137,7 @@ BOOL apiGetCurrentConsoleFontEx(HANDLE hConsoleOutput, BOOL bMaximumWindow, MY_C
 		return FALSE;
 	}
 
-	BOOL lbRc = GetCurrentConsoleFontEx(hConsoleOutput, bMaximumWindow, lpConsoleCurrentFontEx);
+	const BOOL lbRc = GetCurrentConsoleFontEx(hConsoleOutput, bMaximumWindow, lpConsoleCurrentFontEx);
 
 	#ifdef _DEBUG
 	if (lbRc && (lpConsoleCurrentFontEx->dwFontSize.Y > 10))
@@ -146,7 +145,8 @@ BOOL apiGetCurrentConsoleFontEx(HANDLE hConsoleOutput, BOOL bMaximumWindow, MY_C
 		static bool bWarned = false;
 		if (!bWarned && !g_IgnoreSetLargeFont)
 		{
-			_ASSERTE(FALSE && "GetCurrentConsoleFontEx detects large RealConsole font");
+			// For PseudoConsole Windows returns font with size 16 (by default?)
+			_ASSERTE(IsPseudoConsoleWindow(GetConsoleWindow()) && "GetCurrentConsoleFontEx detects large RealConsole font");
 			bWarned = TRUE;
 		}
 	}
@@ -194,7 +194,7 @@ BOOL apiSetCurrentConsoleFontEx(HANDLE hConsoleOutput, BOOL bMaximumWindow, MY_C
 
 
 
-//Used in RM_ALTSERVER
+//Used in RunMode::RM_ALTSERVER
 BOOL apiInitConsoleFontSize(HANDLE hOutput)
 {
 	BOOL lbRc = FALSE;
@@ -263,7 +263,7 @@ BOOL apiSetConsoleFontSize(HANDLE hOutput, int inSizeY, int inSizeX, const wchar
 		//apiGetCurrentConsoleFontEx(GetStdHandle(STD_OUTPUT_HANDLE), FALSE, &cfi);
 		cfi.dwFontSize.X = inSizeX;
 		cfi.dwFontSize.Y = inSizeY;
-		lstrcpynW(cfi.FaceName, asFontName ? asFontName : L"Lucida Console", countof(cfi.FaceName));
+		lstrcpynW(cfi.FaceName, asFontName ? asFontName : DEFAULT_CONSOLE_FONT_NAME, countof(cfi.FaceName));
 
 		HANDLE hConOut = GetStdHandle(STD_OUTPUT_HANDLE);
 		lbRc = apiSetCurrentConsoleFontEx(hConOut, FALSE, &cfi);

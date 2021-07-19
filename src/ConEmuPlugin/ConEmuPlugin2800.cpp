@@ -215,7 +215,7 @@ wchar_t* CPluginW2800::GetPanelDir(GetPanelDirFlags Flags, wchar_t* pszBuffer /*
 			}
 			else
 			{
-				pszDir = lstrdup(pDir->Name);
+				pszDir = lstrdup(pDir->Name).Detach();
 			}
 			free(pDir);
 		}
@@ -331,7 +331,7 @@ bool CPluginW2800::GetPanelItemInfo(const CEPanelInfo& PnlInfo, bool bSelected, 
 	if (!pItem)
 		return false;
 
-	FarGetPluginPanelItem gppi = {sizeof(gppi), sz, pItem};
+	FarGetPluginPanelItem gppi = {sizeof(gppi), static_cast<size_t>(sz), pItem};
 	if (PanelControlApi(PANEL_ACTIVE, iCmd, iIndex, &gppi) <= 0)
 	{
 		free(pItem);
@@ -356,7 +356,7 @@ bool CPluginW2800::GetPanelItemInfo(const CEPanelInfo& PnlInfo, bool bSelected, 
 			pszName = PointToName(pItem->FileName);
 		lstrcpyn(Info.cFileName, pszName, countof(Info.cFileName));
 		if (ppszFullPathName)
-			*ppszFullPathName = lstrdup(pItem->FileName);
+			*ppszFullPathName = lstrdup(pItem->FileName).Detach();
 	}
 	else if (ppszFullPathName)
 	{
@@ -1090,7 +1090,7 @@ bool CPluginW2800::InputBox(LPCWSTR Title, LPCWSTR SubTitle, LPCWSTR HistoryName
 	wchar_t strTemp[MAX_PATH+1];
 	if (!InfoW2800->InputBox(&guid_ConEmu, &guid_ConEmuInput, Title, SubTitle, HistoryName, SrcText, strTemp, countof(strTemp), NULL, FIB_BUTTONS))
 		return false;
-	DestText = lstrdup(strTemp);
+	DestText = lstrdup(strTemp).Detach();
 	return true;
 }
 
@@ -1384,13 +1384,14 @@ HANDLE CPluginW2800::Open(const void* apInfo)
 			// That was GuiMacro call?
 			if (bGuiMacroCall)
 			{
-				static FarMacroCall rc = {sizeof(rc)};
-				static FarMacroValue val;
+				static FarMacroCall rc{};
+				static FarMacroValue val{};
+				rc.StructSize = sizeof(rc);
 				rc.Count = 1;
 				rc.Values = &val;
 				rc.Callback = FreeMacroResult;
 				val.Type = FMVT_STRING;
-				val.String = GetEnvVar(CEGUIMACRORETENVVAR);
+				val.String = GetEnvVar(CEGUIMACRORETENVVAR).Detach();
 				h = (HANDLE)&rc;
 			}
 			else

@@ -30,8 +30,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _DEBUG
 	#define DebugString(x) //OutputDebugString(x)
+	#define DBG_XTERM(x) //CEAnsi::DebugXtermOutput(x)
+	#define DBG_XTERM_MSGBOX(msg) //_ASSERTE(FALSE && msg)
 #else
 	#define DebugString(x) //OutputDebugString(x)
+	#define DBG_XTERM(x)
+	#define DBG_XTERM_MSGBOX(msg)
 #endif
 
 #include "../common/Common.h"
@@ -45,6 +49,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "hkConsoleOutput.h"
 #include "hlpConsole.h"
 #include "MainThread.h"
+#include "DllOptions.h"
+#include "../common/MHandle.h"
+#include "../common/WObjects.h"
 
 /* **************** */
 
@@ -104,6 +111,9 @@ BOOL WINAPI OnSetConsoleMode(HANDLE hConsoleHandle, DWORD dwMode)
 	}
 	#endif
 
+	CEAnsi::WriteAnsiLogFormat("OnSetConsoleMode(0x%04x,x%02X,isVim=%s)",
+		LODWORD(hConsoleHandle), dwMode, gbIsVimProcess ? "true" : "false");
+
 	if (gbIsVimProcess)
 	{
 		if ((dwMode & (ENABLE_WRAP_AT_EOL_OUTPUT|ENABLE_PROCESSED_OUTPUT)) != (ENABLE_WRAP_AT_EOL_OUTPUT|ENABLE_PROCESSED_OUTPUT))
@@ -123,14 +133,82 @@ BOOL WINAPI OnSetConsoleMode(HANDLE hConsoleHandle, DWORD dwMode)
 	// gh-1291: Support wsl.exe and ubuntu.exe
 	if (IsWin10())
 	{
-		if ((dwMode & ENABLE_VIRTUAL_TERMINAL_INPUT) || (CEAnsi::gbWasXTermOutput && !(dwMode & ENABLE_VIRTUAL_TERMINAL_INPUT)))
+		bool outputChecked = false, outputCheckResult = false;
+		auto isOutput = [&outputChecked, &outputCheckResult, hConsoleHandle]()
 		{
-			if (!HandleKeeper::IsOutputHandle(hConsoleHandle))
+			if (!outputChecked)
 			{
-				_ASSERT(HandleKeeper::IsInputHandle(hConsoleHandle));
-				CEAnsi::StartXTermMode((dwMode & ENABLE_VIRTUAL_TERMINAL_INPUT) != 0);
-				//if (dwMode & ENABLE_VIRTUAL_TERMINAL_INPUT)
-				//	CEAnsi::ChangeTermMode(tmc_AppCursorKeys, true);
+				outputCheckResult = HandleKeeper::IsOutputHandle(hConsoleHandle);
+				outputChecked = true;
+			}
+			return outputCheckResult;
+		};
+
+		#ifdef _DEBUG
+		if (!isOutput())
+		{
+			static DWORD prevInputMode = 0;
+			if (prevInputMode != dwMode)
+			{
+				if ((prevInputMode & ENABLE_VIRTUAL_TERMINAL_INPUT) != (dwMode & ENABLE_VIRTUAL_TERMINAL_INPUT))
+				{
+					if (dwMode & ENABLE_VIRTUAL_TERMINAL_INPUT)
+					{
+						DBG_XTERM_MSGBOX("ENABLE_VIRTUAL_TERMINAL_INPUT On");
+					}
+					else
+					{
+						DBG_XTERM_MSGBOX("ENABLE_VIRTUAL_TERMINAL_INPUT Off");
+					}
+				}
+				prevInputMode = dwMode;
+			}
+		}
+		#endif
+
+		const bool enableVirtualTerminalInput = (dwMode & ENABLE_VIRTUAL_TERMINAL_INPUT) != 0;
+		if (enableVirtualTerminalInput
+			|| (CEAnsi::gWasXTermModeSet[tmc_TerminalType].value == te_xterm && !enableVirtualTerminalInput))
+		{
+			if (!isOutput())
+			{
+				static void* xtermEnabledFor = nullptr;
+
+				#ifdef _DEBUG
+				const auto* hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+				#endif
+				const bool isInput = HandleKeeper::IsInputHandle(hConsoleHandle);
+				const bool allowChange = isInput
+					|| (!enableVirtualTerminalInput && xtermEnabledFor == hConsoleHandle);
+
+				if (allowChange)
+				{
+					DBG_XTERM(enableVirtualTerminalInput ? L"term=XTerm due ENABLE_VIRTUAL_TERMINAL_INPUT" : L"term=Win32 due !ENABLE_VIRTUAL_TERMINAL_INPUT");
+					CEAnsi::ChangeTermMode(tmc_TerminalType, enableVirtualTerminalInput ? te_xterm : te_win32);
+
+					xtermEnabledFor = enableVirtualTerminalInput ? hConsoleHandle : nullptr;
+				}
+			}
+		}
+
+		// don't use "else if" here! first "if" could be executed.
+		const bool enableXterm = (dwMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0;
+		if (CEAnsi::gbIsXTermOutput != enableXterm)
+		{
+			if (isOutput())
+			{
+				DBG_XTERM(enableXterm ? L"xTermOutput=ON due ENABLE_VIRTUAL_TERMINAL_PROCESSING" : L"xTermOutput=OFF due !ENABLE_VIRTUAL_TERMINAL_PROCESSING");
+				DBG_XTERM(enableXterm ? L"AutoLfNl=OFF due ENABLE_VIRTUAL_TERMINAL_PROCESSING" : L"AutoLfNl=ON due !ENABLE_VIRTUAL_TERMINAL_PROCESSING");
+				CEAnsi::StartXTermOutput(enableXterm);
+			}
+		}
+		const bool autoLfNl = (dwMode & DISABLE_NEWLINE_AUTO_RETURN) == 0;
+		if (CEAnsi::IsAutoLfNl() != autoLfNl)
+		{
+			if (isOutput())
+			{
+				DBG_XTERM(autoLfNl ? L"AutoLfNl=ON due DISABLE_NEWLINE_AUTO_RETURN" : L"AutoLfNl=OFF due DISABLE_NEWLINE_AUTO_RETURN");
+				CEAnsi::SetAutoLfNl(autoLfNl);
 			}
 		}
 	}
@@ -378,10 +456,10 @@ BOOL WINAPI OnFillConsoleOutputAttribute(HANDLE hConsoleOutput, WORD wAttribute,
 	CEAnsi::WriteAnsiLogFormat("FillConsoleOutputAttribute(x%02X,%u,{%i,%i})",
 		wAttribute, nLength, dwWriteCoord.X, dwWriteCoord.Y);
 
-	ConEmuColor FillAttr = {CECF_NONE, CONFORECOLOR(wAttribute), CONBACKCOLOR(wAttribute)};
+        const ConEmu::Color fillAttr = {ConEmu::ColorFlags::None, CONFORECOLOR(wAttribute), CONBACKCOLOR(wAttribute)};
 	ExtFillOutputParm fll = {sizeof(fll),
 		efof_Attribute|efof_ResetExt,
-		hConsoleOutput, FillAttr, 0, dwWriteCoord, nLength};
+		hConsoleOutput, fillAttr, 0, dwWriteCoord, nLength};
 	ExtFillOutput(&fll);
 
 	const BOOL lbRc = F(FillConsoleOutputAttribute)(hConsoleOutput, wAttribute, nLength, dwWriteCoord, lpNumberOfAttrsWritten);

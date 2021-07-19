@@ -4,8 +4,14 @@ cd /d "%~dp0"
 setlocal
 set "PATH=%~dp0..\..\Tools\Chocolatey\bin;%PATH%"
 
+if exist "%~dp0..\Deploy\user_env.cmd" (
+  call "%~dp0..\Deploy\user_env.cmd"
+) else (
+  call "%~dp0..\Deploy\user_env.default.cmd"
+)
+
 call "%~dp0..\Deploy\GetCurVer.cmd"
-powershell -noprofile -command "%~dp0..\Deploy\UpdatePackageVersions.ps1" %CurVerBuild%
+powershell -noprofile -ExecutionPolicy RemoteSigned -command "%~dp0..\Deploy\UpdatePackageVersions.ps1" %CurVerBuild%
 if errorlevel 1 (
   call cecho "Failed to update Chocolatey and Nuget packages"
   exit /b 100

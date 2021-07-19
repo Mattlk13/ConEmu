@@ -37,11 +37,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _WIN32_WINNT 0x0501
 
 #include "../common/defines.h"
-#include <TCHAR.h>
-#include <Tlhelp32.h>
+#include <tchar.h>
 #include <shlwapi.h>
 #include "../common/Common.h"
-#include "../common/ConEmuCheck.h"
 #include "../ConEmuHk/ConEmuHooks.h"
 #include "../ConEmuDW/ConEmuDw.h"
 #include "PluginHeader.h"
@@ -61,7 +59,7 @@ extern HMODULE ghPluginModule;
 extern struct HookModeFar gFarMode;
 
 
-#define kernel32 L"kernel32.dll"
+#define KERNEL32 L"kernel32.dll"
 #define user32   L"user32.dll"
 #define shell32  L"shell32.dll"
 
@@ -83,12 +81,7 @@ bool StartupHooks(HMODULE ahOurDll)
 
 	if (ghHooksModule == NULL)
 	{
-		wchar_t szHkModule[64];
-		#ifdef WIN64
-			wcscpy_c(szHkModule, L"ConEmuHk64.dll");
-		#else
-			wcscpy_c(szHkModule, L"ConEmuHk.dll");
-		#endif
+		LPCWSTR szHkModule = ConEmuHk_DLL_3264;
 		ghHooksModule = GetModuleHandle(szHkModule);
 
 		if ((ghHooksModule == NULL) && (ghConEmuWndDC != NULL))
@@ -140,18 +133,19 @@ bool StartupHooks(HMODULE ahOurDll)
 	StartupConsoleHooks();
 
 	SetLoadLibraryCallback(ghPluginModule, CPluginBase::OnLibraryLoaded, NULL/*OnLibraryUnLoaded*/);
-	SetHookCallbacks("FreeConsole",  kernel32, ghPluginModule, CPluginBase::OnConsoleDetaching, NULL, NULL);
-	SetHookCallbacks("AllocConsole", kernel32, ghPluginModule, NULL, CPluginBase::OnConsoleWasAttached, NULL);
-	SetHookCallbacks("PeekConsoleInputA", kernel32, ghPluginModule, CPluginBase::OnConsolePeekInput, CPluginBase::OnConsolePeekInputPost, NULL);
-	SetHookCallbacks("PeekConsoleInputW", kernel32, ghPluginModule, CPluginBase::OnConsolePeekInput, CPluginBase::OnConsolePeekInputPost, NULL);
-	SetHookCallbacks("ReadConsoleInputA", kernel32, ghPluginModule, CPluginBase::OnConsoleReadInput, CPluginBase::OnConsoleReadInputPost, NULL);
-	SetHookCallbacks("ReadConsoleInputW", kernel32, ghPluginModule, CPluginBase::OnConsoleReadInput, CPluginBase::OnConsoleReadInputPost, NULL);
-	SetHookCallbacks("WriteConsoleOutputA", kernel32, ghPluginModule, CPluginBase::OnWriteConsoleOutput, NULL, NULL);
-	SetHookCallbacks("WriteConsoleOutputW", kernel32, ghPluginModule, CPluginBase::OnWriteConsoleOutput, NULL, NULL);
-	SetHookCallbacks("GetNumberOfConsoleInputEvents", kernel32, ghPluginModule, NULL, CPluginBase::OnGetNumberOfConsoleInputEventsPost, NULL);
+	SetHookCallbacks("FreeConsole",  KERNEL32, ghPluginModule, CPluginBase::OnConsoleDetaching, NULL, NULL);
+	SetHookCallbacks("AllocConsole", KERNEL32, ghPluginModule, NULL, CPluginBase::OnConsoleWasAttached, NULL);
+	SetHookCallbacks("PeekConsoleInputA", KERNEL32, ghPluginModule, CPluginBase::OnConsolePeekInput, CPluginBase::OnConsolePeekInputPost, NULL);
+	SetHookCallbacks("PeekConsoleInputW", KERNEL32, ghPluginModule, CPluginBase::OnConsolePeekInput, CPluginBase::OnConsolePeekInputPost, NULL);
+	SetHookCallbacks("ReadConsoleInputA", KERNEL32, ghPluginModule, CPluginBase::OnConsoleReadInput, CPluginBase::OnConsoleReadInputPost, NULL);
+	SetHookCallbacks("ReadConsoleInputW", KERNEL32, ghPluginModule, CPluginBase::OnConsoleReadInput, CPluginBase::OnConsoleReadInputPost, NULL);
+	SetHookCallbacks("WriteConsoleOutputA", KERNEL32, ghPluginModule, CPluginBase::OnWriteConsoleOutput, NULL, NULL);
+	SetHookCallbacks("WriteConsoleOutputW", KERNEL32, ghPluginModule, CPluginBase::OnWriteConsoleOutput, NULL, NULL);
+	SetHookCallbacks("GetNumberOfConsoleInputEvents", KERNEL32, ghPluginModule, NULL, CPluginBase::OnGetNumberOfConsoleInputEventsPost, NULL);
 	SetHookCallbacks("ShellExecuteExW", shell32, ghPluginModule, NULL, NULL, CPluginBase::OnShellExecuteExW_Except);
-	gFarMode.OnCurDirChanged = CPluginBase::OnCurDirChanged;
-	gFarMode.FarVer = gFarVersion;
+	gFarMode.onCurDirChanged = CPluginBase::OnCurDirChanged;
+	gFarMode.farVer = gFarVersion;
+	_ASSERTE(gFarMode.bFarHookMode); // should be set in global initializer
 
 	SetFarHookMode(&gFarMode);
 
@@ -190,17 +184,17 @@ void ShutdownHooks()
 
 	if (SetHookCallbacks)
 	{
-		SetHookCallbacks("FreeConsole",  kernel32, ghPluginModule, NULL, NULL, NULL);
-		SetHookCallbacks("AllocConsole", kernel32, ghPluginModule, NULL, NULL, NULL);
-		SetHookCallbacks("PeekConsoleInputA", kernel32, ghPluginModule, NULL, NULL, NULL);
-		SetHookCallbacks("PeekConsoleInputW", kernel32, ghPluginModule, NULL, NULL, NULL);
-		SetHookCallbacks("ReadConsoleInputA", kernel32, ghPluginModule, NULL, NULL, NULL);
-		SetHookCallbacks("ReadConsoleInputW", kernel32, ghPluginModule, NULL, NULL, NULL);
-		SetHookCallbacks("WriteConsoleOutputA", kernel32, ghPluginModule, NULL, NULL, NULL);
-		SetHookCallbacks("WriteConsoleOutputW", kernel32, ghPluginModule, NULL, NULL, NULL);
+		SetHookCallbacks("FreeConsole",  KERNEL32, ghPluginModule, NULL, NULL, NULL);
+		SetHookCallbacks("AllocConsole", KERNEL32, ghPluginModule, NULL, NULL, NULL);
+		SetHookCallbacks("PeekConsoleInputA", KERNEL32, ghPluginModule, NULL, NULL, NULL);
+		SetHookCallbacks("PeekConsoleInputW", KERNEL32, ghPluginModule, NULL, NULL, NULL);
+		SetHookCallbacks("ReadConsoleInputA", KERNEL32, ghPluginModule, NULL, NULL, NULL);
+		SetHookCallbacks("ReadConsoleInputW", KERNEL32, ghPluginModule, NULL, NULL, NULL);
+		SetHookCallbacks("WriteConsoleOutputA", KERNEL32, ghPluginModule, NULL, NULL, NULL);
+		SetHookCallbacks("WriteConsoleOutputW", KERNEL32, ghPluginModule, NULL, NULL, NULL);
 		if (SetConsoleCallbacks)
 			SetConsoleCallbacks(ghPluginModule, 0, nullptr);
-		SetHookCallbacks("GetNumberOfConsoleInputEvents", kernel32, ghPluginModule, NULL, NULL, NULL);
+		SetHookCallbacks("GetNumberOfConsoleInputEvents", KERNEL32, ghPluginModule, NULL, NULL, NULL);
 		SetHookCallbacks("ShellExecuteExW", shell32, ghPluginModule, NULL, NULL, NULL);
 		SetHookCallbacks = NULL;
 	}

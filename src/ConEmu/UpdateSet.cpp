@@ -27,16 +27,18 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #define HIDE_USE_EXCEPTION_INFO
-#include "header.h"
-#include "UpdateSet.h"
+
+#include "Header.h"
+
 #include "ConEmu.h"
 #include "OptionsClass.h"
+#include "UpdateSet.h"
 
 ConEmuUpdateSettings::ConEmuUpdateSettings()
 {
 }
 
-LPCWSTR ConEmuUpdateSettings::UpdateVerLocation()
+LPCWSTR ConEmuUpdateSettings::UpdateVerLocation() const
 {
 	if (szUpdateVerLocation && *szUpdateVerLocation)
 		return szUpdateVerLocation;
@@ -53,7 +55,7 @@ LPCWSTR ConEmuUpdateSettings::UpdateVerLocationDefault()
 	return pszDefault;
 }
 
-bool ConEmuUpdateSettings::IsVerLocationDeprecated(LPCWSTR asNewIniLocation)
+bool ConEmuUpdateSettings::IsVerLocationDeprecated(LPCWSTR asNewIniLocation) const
 {
 	if (!asNewIniLocation || !*asNewIniLocation)
 	{
@@ -74,7 +76,7 @@ bool ConEmuUpdateSettings::IsVerLocationDeprecated(LPCWSTR asNewIniLocation)
 		// Invalid location
 		// If one needs to point on one's local drive,
 		// proper format is: "file:///C:\path\version.ini"
-		_ASSERTE(pszDomain != NULL);
+		_ASSERTE(pszDomain != nullptr);
 		return true;
 	}
 
@@ -97,7 +99,7 @@ void ConEmuUpdateSettings::SetUpdateVerLocation(LPCWSTR asNewIniLocation)
 	if (asNewIniLocation && *asNewIniLocation
 		&& !IsVerLocationDeprecated(asNewIniLocation))
 	{
-		szUpdateVerLocation = lstrdup(asNewIniLocation);
+		szUpdateVerLocation = lstrdup(asNewIniLocation).Detach();
 	}
 
 	if (gpSetCls && ghOpWnd)
@@ -118,27 +120,28 @@ ConEmuUpdateSettings::Builds ConEmuUpdateSettings::GetDefaultUpdateChannel()
 void ConEmuUpdateSettings::ResetToDefaults()
 {
 	// Указатели должны быть освобождены перед вызовом
-	_ASSERTE(szUpdateExeCmdLine==NULL);
+	_ASSERTE(szUpdateExeCmdLine==nullptr);
 
-	szUpdateVerLocation = NULL;
+	szUpdateVerLocation = nullptr;
 	isUpdateCheckOnStartup = true;
 	isUpdateCheckHourly = true;
 	isUpdateConfirmDownload = true; // true-Show MsgBox, false-notify via TSA only
 	isUpdateUseBuilds = GetDefaultUpdateChannel();
 	isUpdateInetTool = false;
-	szUpdateInetTool = NULL;
+	szUpdateInetTool = nullptr;
 	isUpdateUseProxy = false;
-	szUpdateProxy = szUpdateProxyUser = szUpdateProxyPassword = NULL; // "Server:port"
+	szUpdateProxy = szUpdateProxyUser = szUpdateProxyPassword = nullptr; // "Server:port"
 	// Проверяем, была ли программа установлена через ConEmuSetup.exe?
 	isUpdateDownloadSetup = 0; // 0-Auto, 1-Installer (ConEmuSetup.exe), 2-7z archive (ConEmu.7z), WinRar or 7z required
 	isSetupDetected = 0; // 0-пока не проверялся, 1-установлено через Installer, пути совпали, 2-Installer не запускался
 	isSetup64 = WIN3264TEST(false,true); // определяется вместе с isSetupDetected
 
-	szUpdateExeCmdLineDef = lstrdup(L"\"%1\" /p:%3 /qr");
+	szUpdateExeCmdLineDef = lstrdup(L"\"%1\" /p:%3 /qr").Detach();
 	SafeFree(szUpdateExeCmdLine);
 
 	bool bWinRar = false;
-	wchar_t* pszArcPath = NULL; BOOL bWin64 = IsWindows64();
+	wchar_t* pszArcPath = nullptr;
+	const BOOL bWin64 = IsWindows64();
 	for (int i = 0; !(pszArcPath && *pszArcPath) && (i <= 5); i++)
 	{
 		SettingsRegistry regArc;
@@ -186,17 +189,20 @@ void ConEmuUpdateSettings::ResetToDefaults()
 				}
 			}
 			break;
+		default:
+			_ASSERTE(FALSE && "case was not processed");
 		}
 	}
 	if (!pszArcPath || !*pszArcPath)
 	{
-		szUpdateArcCmdLineDef = lstrdup(L"\"%ProgramFiles%\\7-Zip\\7zg.exe\" x -y \"%1\""); // "%1"-archive file, "%2"-ConEmu base dir
+		// "%1"-archive file, "%2"-ConEmu base dir
+		szUpdateArcCmdLineDef = lstrdup(L"\"%ProgramFiles%\\7-Zip\\7zg.exe\" x -y \"%1\"").Detach();
 	}
 	else
 	{
 		LPCWSTR pszExt = PointToExt(pszArcPath);
-		int cchMax = lstrlen(pszArcPath)+64;
-		szUpdateArcCmdLineDef = (wchar_t*)malloc(cchMax*sizeof(wchar_t));
+		const auto cchMax = wcslen(pszArcPath) + 64;
+		szUpdateArcCmdLineDef = static_cast<wchar_t*>(malloc(cchMax * sizeof(wchar_t)));
 		if (szUpdateArcCmdLineDef)
 		{
 			if (pszExt && lstrcmpi(pszExt, L".exe") == 0)
@@ -218,9 +224,10 @@ void ConEmuUpdateSettings::ResetToDefaults()
 	SafeFree(pszArcPath);
 	SafeFree(szUpdateArcCmdLine);
 
-	szUpdateDownloadPath = lstrdup(L"%TEMP%\\ConEmu");
+	szUpdateDownloadPath = lstrdup(L"%TEMP%\\ConEmu").Detach();
 	isUpdateLeavePackages = false;
-	szUpdatePostUpdateCmd = lstrdup(L"echo Last successful update>ConEmuUpdate.info && date /t>>ConEmuUpdate.info && time /t>>ConEmuUpdate.info"); // Юзер может чего-то свое делать с распакованными файлами
+	// The example how to apply something over updated installation
+	szUpdatePostUpdateCmd = lstrdup(L"echo Last successful update>ConEmuUpdate.info && date /t>>ConEmuUpdate.info && time /t>>ConEmuUpdate.info").Detach();
 }
 
 ConEmuUpdateSettings::~ConEmuUpdateSettings()
@@ -251,28 +258,29 @@ void ConEmuUpdateSettings::LoadFrom(ConEmuUpdateSettings* apFrom)
 {
 	FreePointers();
 
-	szUpdateVerLocation = (apFrom->szUpdateVerLocation && *apFrom->szUpdateVerLocation) ? lstrdup(apFrom->szUpdateVerLocation) : NULL; // ConEmu latest version location info
+	szUpdateVerLocation = (apFrom->szUpdateVerLocation && *apFrom->szUpdateVerLocation)
+		? lstrdup(apFrom->szUpdateVerLocation).Detach() : nullptr; // ConEmu latest version location info
 	isUpdateCheckOnStartup = apFrom->isUpdateCheckOnStartup;
 	isUpdateCheckHourly = apFrom->isUpdateCheckHourly;
 	isUpdateConfirmDownload = apFrom->isUpdateConfirmDownload;
 	isUpdateUseBuilds = (apFrom->isUpdateUseBuilds >= Builds::Stable && apFrom->isUpdateUseBuilds <= Builds::Preview)
 		? apFrom->isUpdateUseBuilds : GetDefaultUpdateChannel();
 	isUpdateInetTool = apFrom->isUpdateInetTool;
-	szUpdateInetTool = lstrdup(apFrom->szUpdateInetTool);
+	szUpdateInetTool = lstrdup(apFrom->szUpdateInetTool).Detach();
 	isUpdateUseProxy = apFrom->isUpdateUseProxy;
-	szUpdateProxy = lstrdup(apFrom->szUpdateProxy); // "Server:port"
-	szUpdateProxyUser = lstrdup(apFrom->szUpdateProxyUser);
-	szUpdateProxyPassword = lstrdup(apFrom->szUpdateProxyPassword);
+	szUpdateProxy = lstrdup(apFrom->szUpdateProxy).Detach(); // "Server:port"
+	szUpdateProxyUser = lstrdup(apFrom->szUpdateProxyUser).Detach();
+	szUpdateProxyPassword = lstrdup(apFrom->szUpdateProxyPassword).Detach();
 	isUpdateDownloadSetup = apFrom->isUpdateDownloadSetup; // 0-Auto, 1-Installer (ConEmuSetup.exe), 2-7z archive (ConEmu.7z), WinRar or 7z required
 	isSetupDetected = apFrom->isSetupDetected;
 	// "%1"-archive or setup file, "%2"-ConEmu base dir, "%3"-x86/x64, "%4"-ConEmu PID
-	szUpdateExeCmdLine = lstrdup(apFrom->szUpdateExeCmdLine);
-	szUpdateExeCmdLineDef = lstrdup(apFrom->szUpdateExeCmdLineDef);
-	szUpdateArcCmdLine = lstrdup(apFrom->szUpdateArcCmdLine);
-	szUpdateArcCmdLineDef = lstrdup(apFrom->szUpdateArcCmdLineDef);
-	szUpdateDownloadPath = lstrdup(apFrom->szUpdateDownloadPath); // "%TEMP%"
+	szUpdateExeCmdLine = lstrdup(apFrom->szUpdateExeCmdLine).Detach();
+	szUpdateExeCmdLineDef = lstrdup(apFrom->szUpdateExeCmdLineDef).Detach();
+	szUpdateArcCmdLine = lstrdup(apFrom->szUpdateArcCmdLine).Detach();
+	szUpdateArcCmdLineDef = lstrdup(apFrom->szUpdateArcCmdLineDef).Detach();
+	szUpdateDownloadPath = lstrdup(apFrom->szUpdateDownloadPath).Detach(); // "%TEMP%"
 	isUpdateLeavePackages = apFrom->isUpdateLeavePackages;
-	szUpdatePostUpdateCmd = lstrdup(apFrom->szUpdatePostUpdateCmd); // Юзер может чего-то свое делать с распакованными файлами
+	szUpdatePostUpdateCmd = lstrdup(apFrom->szUpdatePostUpdateCmd).Detach(); // User may apply something over updated installation
 }
 
 bool ConEmuUpdateSettings::UpdatesAllowed(wchar_t (&szReason)[128])
@@ -326,7 +334,7 @@ bool ConEmuUpdateSettings::UpdatesAllowed(wchar_t (&szReason)[128])
 				if (0 == RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\WinRAR\\Extraction\\Profile", 0, KEY_READ, &hk))
 				{
 					DWORD nSize = sizeof(nSubFolder);
-					if (0 != RegQueryValueEx(hk, L"UnpToSubfolders", NULL, NULL, (LPBYTE)&nSubFolder, &nSize))
+					if (0 != RegQueryValueEx(hk, L"UnpToSubfolders", nullptr, nullptr, (LPBYTE)&nSubFolder, &nSize))
 						nSubFolder = 0;
 					RegCloseKey(hk);
 				}
@@ -375,7 +383,7 @@ BYTE ConEmuUpdateSettings::UpdateDownloadSetup()
 			{
 				_ASSERTE(countof(szInstallDir)>(MAX_PATH+1));
 				DWORD dwSize = MAX_PATH*sizeof(*szInstallDir);
-				if (0 == RegQueryValueEx(hk, pszName, NULL, NULL, (LPBYTE)szInstallDir, &dwSize) && *szInstallDir)
+				if (0 == RegQueryValueEx(hk, pszName, nullptr, nullptr, (LPBYTE)szInstallDir, &dwSize) && *szInstallDir)
 				{
 					size_t nLen = _tcslen(szInstallDir);
 					if (szInstallDir[nLen-1] != L'\\')
@@ -399,7 +407,7 @@ BYTE ConEmuUpdateSettings::UpdateDownloadSetup()
 	return isSetupDetected ? isSetupDetected : 2;
 }
 
-LPCWSTR ConEmuUpdateSettings::UpdateExeCmdLine(wchar_t (&szCPU)[4])
+LPCWSTR ConEmuUpdateSettings::UpdateExeCmdLine(wchar_t (&szCPU)[4]) const
 {
 	wcscpy_c(szCPU, isSetup64 ? L"x64" : L"x86");
 	if (szUpdateExeCmdLine && *szUpdateExeCmdLine)
@@ -407,14 +415,14 @@ LPCWSTR ConEmuUpdateSettings::UpdateExeCmdLine(wchar_t (&szCPU)[4])
 	return szUpdateExeCmdLineDef ? szUpdateExeCmdLineDef : L"";
 }
 
-LPCWSTR ConEmuUpdateSettings::UpdateArcCmdLine()
+LPCWSTR ConEmuUpdateSettings::UpdateArcCmdLine() const
 {
 	if (szUpdateArcCmdLine && *szUpdateArcCmdLine)
 		return szUpdateArcCmdLine;
 	return szUpdateArcCmdLineDef ? szUpdateArcCmdLineDef : L"";;
 }
 
-LPCWSTR ConEmuUpdateSettings::GetUpdateInetToolCmd()
+LPCWSTR ConEmuUpdateSettings::GetUpdateInetToolCmd() const
 {
 	static wchar_t szDefault[] = L"\"%ConEmuBaseDir%\\ConEmuC.exe\" -download %1 %2";
 	LPCWSTR pszCommand = (isUpdateInetTool && szUpdateInetTool && *szUpdateInetTool)
@@ -424,18 +432,19 @@ LPCWSTR ConEmuUpdateSettings::GetUpdateInetToolCmd()
 
 void ConEmuUpdateSettings::CheckHourlyUpdate()
 {
-	const DWORD dwCurTick = GetTickCount();
-	if (!dwLastUpdateCheck)
+	const auto updateDelaySeconds = std::chrono::minutes(60);
+	const auto now = std::chrono::system_clock::now();
+	if (lastUpdateCheck == std::chrono::system_clock::time_point{})
 	{
-		dwLastUpdateCheck = dwCurTick;
+		lastUpdateCheck = now;
 	}
 	else
 	{
-		DWORD dwDelta = (dwCurTick - dwLastUpdateCheck);
-		if (dwDelta >= (60*60*1000))
+		const auto dwDelta = std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdateCheck);
+		if (dwDelta >= updateDelaySeconds)
 		{
-			dwLastUpdateCheck = dwCurTick;
-			gpConEmu->CheckUpdates(FALSE);
+			lastUpdateCheck = now;
+			gpConEmu->CheckUpdates(UpdateCallMode::Automatic);
 		}
 	}
 }

@@ -50,21 +50,21 @@ LRESULT CSetPgDefTerm::OnInitDialog(HWND hDlg, bool abInitial)
 	// Default terminal apps
 	CheckDlgButton(hDlg, cbDefaultTerminal, gpSet->isSetDefaultTerminal);
 	bool bLeaveInTSA = gpSet->isRegisterOnOsStartupTSA;
-	bool bRegister = gpSet->isRegisterOnOsStartup || gpConEmu->mp_DefTrm->IsRegisteredOsStartup(NULL, &bLeaveInTSA);
+	bool bRegister = gpSet->isRegisterOnOsStartup || gpConEmu->mp_DefTrm->IsRegisteredOsStartup(nullptr, &bLeaveInTSA);
 	CheckDlgButton(hDlg, cbDefaultTerminalStartup, bRegister);
 	CheckDlgButton(hDlg, cbDefaultTerminalTSA, bLeaveInTSA);
 	EnableWindow(GetDlgItem(hDlg, cbDefaultTerminalTSA), bRegister);
-	CheckDlgButton(hDlg, cbDefTermAgressive, gpSet->isRegisterAgressive);
+	CheckDlgButton(hDlg, cbDefTermAgressive, gpSet->isRegisterAggressive);
 	CheckDlgButton(hDlg, cbDefaultTerminalNoInjects, gpSet->isDefaultTerminalNoInjects);
 	CheckDlgButton(hDlg, cbDefaultTerminalUseExisting, !gpSet->isDefaultTerminalNewWindow);
 	CheckDlgButton(hDlg, cbDefaultTerminalDebugLog, gpSet->isDefaultTerminalDebugLog);
-	CheckRadioButton(hDlg, rbDefaultTerminalConfAuto, rbDefaultTerminalConfNever, rbDefaultTerminalConfAuto+gpSet->nDefaultTerminalConfirmClose);
-	wchar_t* pszApps = gpSet->GetDefaultTerminalApps();
-	_ASSERTE(pszApps!=NULL);
+	CheckRadioButton(hDlg, rbDefaultTerminalConfAuto, rbDefaultTerminalConfNever,
+		rbDefaultTerminalConfAuto + static_cast<int>(gpSet->nDefaultTerminalConfirmClose));
+	CEStr pszApps = gpSet->GetDefaultTerminalApps();
+	_ASSERTE(pszApps!=nullptr);
 	SetDlgItemText(hDlg, tDefaultTerminal, pszApps);
-	if (wcschr(pszApps, L',') != NULL && wcschr(pszApps, L'|') == NULL)
+	if (wcschr(pszApps, L',') != nullptr && wcschr(pszApps, L'|') == nullptr)
 		Icon.ShowTrayIcon(L"List of hooked executables must be delimited with \"|\" but not commas", tsa_Default_Term);
-	SafeFree(pszApps);
 
 	return 0;
 }
@@ -75,15 +75,13 @@ LRESULT CSetPgDefTerm::OnEditChanged(HWND hDlg, WORD nCtrlId)
 	{
 	case tDefaultTerminal:
 	{
-		wchar_t* pszApps = GetDlgItemTextPtr(hDlg, tDefaultTerminal);
-		if (!pszApps || !*pszApps)
+		CEStr pszApps = GetDlgItemTextPtr(hDlg, tDefaultTerminal);
+		if (!pszApps)
 		{
-			SafeFree(pszApps);
-			pszApps = lstrdup(DEFAULT_TERMINAL_APPS/*L"explorer.exe"*/);
+			pszApps.Set(DEFAULT_TERMINAL_APPS/*L"explorer.exe"*/);
 			SetDlgItemText(hDlg, tDefaultTerminal, pszApps);
 		}
 		gpSet->SetDefaultTerminalApps(pszApps);
-		SafeFree(pszApps);
 	}
 	break;
 

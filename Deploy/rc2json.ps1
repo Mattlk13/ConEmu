@@ -25,7 +25,7 @@ $target_yaml_path = ($path + "\..\src\l10n\")
 $conemu_page_automsg = "*This page was generated automatically from ConEmu sources*"
 $conemu_page_hotkeymark = "{% comment %} LIST OF HOTKEYS {% endcomment %}"
 
-$dest_md = ($path + "\..\..\ConEmu-GitHub-io\ConEmu.github.io\en\")
+$dest_md = ($path + "\..\..\ConEmu.github.io\en\")
 
 $conemu_hotkeys_md = Join-Path $dest_md "KeyboardShortcuts.md"
 
@@ -36,8 +36,13 @@ $linedelta = 7
 $script:ignore_ctrls = @(
   "tAppDistinctHolder", "tDefTermWikiLink", "stPalettePreviewFast",
   "stConEmuUrl", "tvSetupCategories", "stSetCommands2", "stHomePage", "stDisableConImeFast3", "stDisableConImeFast2",
-  "lbActivityLog", "lbConEmuHotKeys", "IDI_ICON1", "IDI_ICON2", "IDI_ICON3", "stConEmuAbout", "IDD_RESTART"
+  "lbActivityLog", "lbConEmuHotKeys", "stConEmuAbout", "IDD_RESTART"
 )
+
+$script:default_ctrls = @{
+  'IDOK'='OK'; 'IDCANCEL'='Cancel'; 'IDYES'='Yes'; 'IDNO'='No'; 'IDABORT'='Abort'; 'IDRETRY'='Retry';
+  'IDIGNORE'='Ignore'; 'IDTRYAGAIN'='Try'; 'IDCONTINUE'='Continue';
+}
 
 $last_gen_ids_note = "// last auto-gen identifier"
 $last_gen_str_note = "{ /* empty trailing item for patch convenience */ }"
@@ -51,7 +56,6 @@ function AppendExistingLanguages()
   $script:json.languages | ? { $_.id -ne "en" } | % {
     $script:l10n += "    ,"
     $script:l10n += "    {`"id`": `"$($_.id)`", `"name`": `"$($_.name)`" }"
-    $script:yaml.Add($_.id, @{})
   }
 }
 
@@ -64,9 +68,6 @@ function InitializeJsonData()
   } else {
     $script:json = $NULL
   }
-
-  $script:yaml = @{}
-  $script:yaml.Add("en", @{})
 
   $script:l10n = @("{")
   $script:l10n += "  `"languages`": ["
@@ -348,7 +349,7 @@ function ParseResIds($resh)
     $ln = $resh[$l].Trim()
     if ($ln -match "#define\s+(\w+)\s+(\-?\d+)") {
       $id = [int]$matches[2]
-      if ($script:ignore_ctrls.Contains($matches[1])) {
+      if ($script:ignore_ctrls.Contains($matches[1]) -Or $matches[1].StartsWith("IDI_ICON")) {
         ## Just skip this resource ID
       } elseif ($script:res_id.ContainsValue($id)) {
         $dup = ""; $script:res_id.Keys | % { if ($script:res_id[$_] -eq $id) { $dup = $_ } }
@@ -497,15 +498,6 @@ function AppendExistingTranslations([string]$section,[string]$name,[string]$en_v
           $str = [System.String]::Join("",$jlng).Replace("`r","\r").Replace("`n","\n").Replace("`t","\t").Replace("`"","\`"")
           if ($str -ne "") {
             $script:l10n += (AddValue "$depr$($_.id)" $str)
-            if (-not $script:yaml.ContainsKey($_.id)) {
-              Write-Host -ForegroundColor Red "Language not found: $($_.id)"
-              $script:yaml.Add($_.id, @{})
-            }
-            if (-not $script:yaml[$_.id].ContainsKey($section)) {
-              Write-Host -ForegroundColor Red "Section not found: $($_.id):$section"
-              $script:yaml[$_.id].Add($section, @{})
-            }
-            $script:yaml[$_.id][$section].Add($name, $str)
           }
         }
       }
@@ -519,9 +511,6 @@ function WriteResources([string]$section,$ids,$hints)
   $script:l10n += "  ,"
   $script:l10n += "  `"$section`": {"
   $script:first = $TRUE
-  $script:json.languages | % {
-    $script:yaml[$_.id].Add($section, @{})
-  }
 
   $ids.Keys | sort | % {
     $id = $ids[$_]
@@ -531,7 +520,6 @@ function WriteResources([string]$section,$ids,$hints)
       if ($script:first) { $script:first = $FALSE } else { $script:l10n += "    ," }
       $script:l10n += "    `"$name`": {"
       $script:l10n += (AddValue "en" $value)
-      $script:yaml["en"][$section].Add($name, $value)
       if ($script:json -ne $NULL) {
         AppendExistingTranslations $section $name $value
       }
@@ -548,6 +536,12 @@ function WriteControls([string]$section,$ctrls,$ids)
   $script:l10n += "  ,"
   $script:l10n += "  `"$section`": {"
   $script:first = $TRUE
+
+  $script:default_ctrls.Keys | % {
+    if (-Not $ctrls.containskey($_)) {
+      $ctrls.Add($_, $script:default_ctrls[$_])
+    }
+  }
 
   $ctrls.Keys | sort | % {
     $name = $_
@@ -584,8 +578,8 @@ function InitDialogList()
   $script:dialogs += @{ id = "IDD_HOTKEY";          name = "Choose hotkey"; file = $null; }
   $script:dialogs += @{ id = "IDD_AFFINITY";        name = "Set active console processes affinity and priority"; file = $null; }
 
-  $script:dialogs += @{ id = "IDD_SPG_GENERAL";     name = "General"; file = "Settings-Fast"; }
-  $script:dialogs += @{ id = "IDD_SPG_FONTS";       name = " Fonts"; file = "Settings-Main"; }
+  $script:dialogs += @{ id = "IDD_SPG_GENERAL";     name = "General"; file = "Settings-General"; }
+  $script:dialogs += @{ id = "IDD_SPG_FONTS";       name = " Fonts"; file = "Settings-Fonts"; }
   $script:dialogs += @{ id = "IDD_SPG_SIZEPOS";     name = " Size & Pos"; file = "Settings-SizePos"; }
   $script:dialogs += @{ id = "IDD_SPG_APPEAR";      name = " Appearance"; file = "Settings-Appearance"; }
   $script:dialogs += @{ id = "IDD_SPG_QUAKE";       name = " Quake style"; file = "Settings-Quake"; } # NEW
@@ -622,24 +616,6 @@ function InitDialogList()
   $script:dialogs += @{ id = "IDD_SPG_APPDISTINCT2";name = " <App distinct>"; file = $null; } # ONLY rc2json
 }
 
-
-function WriteL10nYaml()
-{
-  $script:yaml.Keys | % {
-    $yaml_file = Join-Path $target_yaml_path "ConEmu_$($_).yaml"
-    Write-Host "Updating: $yaml_file"
-    $lang = $script:yaml[$_]
-    $data = @()
-    $lang.Keys | % {
-      $section = $lang[$_]
-      $data += $_+":"  # cmnhints:
-      $section.Keys | % {
-        $data += "  "+$_+": `"" + $section[$_] + "`""
-      }
-    }
-    Set-Content $yaml_file $data -Encoding UTF8
-  }
-}
 
 
 function UpdateConEmuL10N()
@@ -721,7 +697,6 @@ function UpdateConEmuL10N()
   Write-Host "Updating: $target_l10n"
   Set-Content $target_l10n $script:l10n -Encoding UTF8
 
-  # WriteL10nYaml
 }
 
 # $loop is $TRUE when called from NewLngResourceLoop
